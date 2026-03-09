@@ -6,13 +6,15 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/omnia-core/sports-manager/backend/internal/handlers"
-	"github.com/omnia-core/sports-manager/backend/internal/middleware"
 	"github.com/joho/godotenv"
+	"github.com/omnia-core/sports-manager/backend/internal/handlers"
+	"github.com/omnia-core/sports-manager/backend/internal/mailer"
+	"github.com/omnia-core/sports-manager/backend/internal/middleware"
 	pkgdb "github.com/omnia-core/sports-manager/backend/internal/pkg/db"
 	"github.com/omnia-core/sports-manager/backend/internal/repository"
 	"github.com/omnia-core/sports-manager/backend/internal/usecase"
@@ -38,6 +40,21 @@ func main() {
 	teamRepo := repository.NewTeamRepository(db)
 	teamUC := usecase.NewTeamUsecase(teamRepo)
 	teamHandler := handlers.NewTeamHandler(teamUC)
+
+	smtpPort, _ := strconv.Atoi(optionalEnv("SMTP_PORT", "587"))
+	mailerCfg := mailer.Config{
+		Host:     os.Getenv("SMTP_HOST"),
+		Port:     smtpPort,
+		Username: os.Getenv("SMTP_USERNAME"),
+		Password: os.Getenv("SMTP_PASSWORD"),
+		From:     os.Getenv("SMTP_FROM"),
+		AppURL:   optionalEnv("APP_URL", "http://localhost:5173"),
+	}
+	m := mailer.NewMailer(mailerCfg)
+
+	inviteRepo := repository.NewInviteRepository(db)
+	inviteUC := usecase.NewInviteUsecase(inviteRepo, teamRepo, m)
+	inviteHandler := handlers.NewInviteHandler(inviteUC)
 
 	r := chi.NewRouter()
 
@@ -82,6 +99,13 @@ func main() {
 		r.Put("/{teamID}", teamHandler.UpdateTeam)
 		r.Delete("/{teamID}", teamHandler.DeleteTeam)
 		r.Get("/{teamID}/members", teamHandler.ListMembers)
+		r.Post("/{teamID}/members", inviteHandler.CreateInvite)
+	})
+
+	// Invite routes
+	r.Route("/api/invites", func(r chi.Router) {
+		r.Use(middleware.Authenticate(jwtSecret, authUC))
+		r.Post("/{token}/accept", inviteHandler.AcceptInvite)
 	})
 
 	log.Println("Server starting on :8080")
@@ -113,4 +137,12 @@ func requireEnv(key string) string {
 		log.Fatalf("required environment variable %q is not set", key)
 	}
 	return v
+}
+
+// optionalEnv returns the value of an environment variable, or fallback if unset.
+func optionalEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
