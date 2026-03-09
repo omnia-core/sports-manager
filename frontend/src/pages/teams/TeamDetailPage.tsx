@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTeamStore } from '../../stores/teamStore'
 import { useAuthStore } from '../../stores/authStore'
+import { usePlaybookStore } from '../../stores/playbookStore'
 import { teamsApi } from '../../api/teams'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import Spinner from '../../components/ui/Spinner'
 import Input from '../../components/ui/Input'
+import Modal from '../../components/ui/Modal'
 import { ApiError } from '../../api/client'
-import type { MemberWithUser } from '../../types'
+import type { MemberWithUser, Playbook } from '../../types'
 
 type Tab = 'roster' | 'playbooks'
 
@@ -80,6 +82,173 @@ function InviteForm({ teamID }: { teamID: string }) {
     </form>
   )
 }
+
+// ─── Playbooks tab ────────────────────────────────────────────────────────────
+
+interface CreatePlaybookModalProps {
+  onClose: () => void
+  onSubmit: (name: string, description: string) => Promise<void>
+}
+
+function CreatePlaybookModal({ onClose, onSubmit }: CreatePlaybookModalProps) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return
+    setIsLoading(true)
+    setError('')
+    try {
+      await onSubmit(name.trim(), description.trim())
+      onClose()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to create playbook.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <Modal title="New Playbook" onClose={onClose}>
+      <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4">
+        <Input
+          label="Playbook name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Offensive Sets"
+          autoFocus
+        />
+        <Input
+          label="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Short description..."
+        />
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" isLoading={isLoading}>
+            Create Playbook
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function PlaybookCard({
+  playbook,
+  isCoach,
+  onOpen,
+  onDelete,
+}: {
+  playbook: Playbook
+  isCoach: boolean
+  onOpen: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div
+      className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-secondary/20 bg-primary p-4 transition-colors hover:border-secondary/40"
+      onClick={onOpen}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-foreground">{playbook.name}</p>
+        {playbook.description && (
+          <p className="mt-1 truncate text-xs text-foreground/50">{playbook.description}</p>
+        )}
+      </div>
+      {isCoach && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          className="flex-shrink-0 rounded p-1 text-foreground/30 hover:bg-red-900/30 hover:text-red-400"
+          aria-label="Delete playbook"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      )}
+    </div>
+  )
+}
+
+function PlaybooksTab({ teamID, isCoach }: { teamID: string; isCoach: boolean }) {
+  const navigate = useNavigate()
+  const { playbooks, isLoading, fetchPlaybooks, createPlaybook, deletePlaybook } = usePlaybookStore()
+  const [showCreateModal, setShowCreateModal] = useState(false)
+
+  useEffect(() => {
+    void fetchPlaybooks(teamID)
+  }, [teamID, fetchPlaybooks])
+
+  async function handleDelete(playbookID: string) {
+    if (!window.confirm('Delete this playbook? All plays inside will be lost.')) return
+    await deletePlaybook(playbookID)
+  }
+
+  async function handleCreate(name: string, description: string) {
+    const pb = await createPlaybook(teamID, { name, description: description || undefined })
+    navigate(`/playbooks/${pb.id}`)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Spinner size="lg" />
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm text-foreground/50">{playbooks.length} playbook{playbooks.length !== 1 ? 's' : ''}</p>
+        {isCoach && (
+          <Button onClick={() => setShowCreateModal(true)}>New Playbook</Button>
+        )}
+      </div>
+
+      {playbooks.length === 0 ? (
+        <div className="rounded-lg border border-secondary/10 bg-primary py-16 text-center">
+          <p className="text-sm text-foreground/40">No playbooks yet.</p>
+          {isCoach && (
+            <p className="mt-1 text-xs text-foreground/30">Click "New Playbook" to get started.</p>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {playbooks.map((pb) => (
+            <PlaybookCard
+              key={pb.id}
+              playbook={pb}
+              isCoach={isCoach}
+              onOpen={() => navigate(`/playbooks/${pb.id}`)}
+              onDelete={() => void handleDelete(pb.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {showCreateModal && (
+        <CreatePlaybookModal
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={handleCreate}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function TeamDetailPage() {
   const { teamID } = useParams<{ teamID: string }>()
@@ -171,8 +340,8 @@ export default function TeamDetailPage() {
             {isCoach && teamID && <InviteForm teamID={teamID} />}
           </div>
         )}
-        {activeTab === 'playbooks' && (
-          <p className="text-sm text-foreground/40">Playbooks — coming soon.</p>
+        {activeTab === 'playbooks' && teamID && (
+          <PlaybooksTab teamID={teamID} isCoach={isCoach} />
         )}
       </div>
     </div>

@@ -34,3 +34,50 @@ export interface MemberWithUser {
     avatar_url: string | null
   }
 }
+
+export interface Playbook {
+  id: string
+  team_id: string
+  name: string
+  description: string | null
+  created_at: string
+}
+
+export interface Play {
+  id: string
+  playbook_id: string
+  name: string
+  category: 'offense' | 'defense' | 'special'
+  description: string | null
+  diagram_json: DiagramJSON | null
+  created_at: string
+}
+
+export interface DiagramJSON {
+  background: 'halfcourt' | 'fullcourt'
+  players: PlayerToken[]
+  arrows: Arrow[]
+  annotations: Annotation[]
+}
+
+export interface PlayerToken {
+  id: string
+  x: number
+  y: number
+  team: 'offense' | 'defense'
+  label: string
+}
+
+export interface Arrow {
+  id: string
+  from: string
+  points: number[]
+  type: 'run' | 'pass' | 'screen'
+}
+
+export interface Annotation {
+  id: string
+  x: number
+  y: number
+  text: string
+}

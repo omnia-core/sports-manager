@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import Spinner from './components/ui/Spinner'
@@ -9,6 +9,10 @@ import RegisterPage from './pages/auth/RegisterPage'
 import AcceptInvitePage from './pages/auth/AcceptInvitePage'
 import TeamsPage from './pages/teams/TeamsPage'
 import TeamDetailPage from './pages/teams/TeamDetailPage'
+import PlaybookPage from './pages/playbooks/PlaybookPage'
+
+// Lazy-load the Konva editor so it doesn't bloat the main bundle
+const PlayEditorPage = lazy(() => import('./pages/playbooks/PlayEditorPage'))
 
 function AppRoutes() {
   const { isLoading } = useAuthStore()
@@ -45,6 +49,29 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <TeamDetailPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/playbooks/:playbookID"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <PlaybookPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/plays/:playID"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><Spinner size="lg" /></div>}>
+                <PlayEditorPage />
+              </Suspense>
             </Layout>
           </ProtectedRoute>
         }
