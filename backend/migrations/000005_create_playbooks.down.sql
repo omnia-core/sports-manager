@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS plays;
+DROP TABLE IF EXISTS playbooks;

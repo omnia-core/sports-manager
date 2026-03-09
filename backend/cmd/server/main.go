@@ -56,6 +56,10 @@ func main() {
 	inviteUC := usecase.NewInviteUsecase(inviteRepo, teamRepo, m)
 	inviteHandler := handlers.NewInviteHandler(inviteUC)
 
+	playbookRepo := repository.NewPlaybookRepository(db)
+	playbookUC := usecase.NewPlaybookUsecase(playbookRepo, teamRepo)
+	playbookHandler := handlers.NewPlaybookHandler(playbookUC)
+
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -100,12 +104,32 @@ func main() {
 		r.Delete("/{teamID}", teamHandler.DeleteTeam)
 		r.Get("/{teamID}/members", teamHandler.ListMembers)
 		r.Post("/{teamID}/members", inviteHandler.CreateInvite)
+		r.Get("/{teamID}/playbooks", playbookHandler.ListPlaybooks)
+		r.Post("/{teamID}/playbooks", playbookHandler.CreatePlaybook)
 	})
 
 	// Invite routes
 	r.Route("/api/invites", func(r chi.Router) {
 		r.Use(middleware.Authenticate(jwtSecret, authUC))
 		r.Post("/{token}/accept", inviteHandler.AcceptInvite)
+	})
+
+	// Playbook routes
+	r.Route("/api/playbooks", func(r chi.Router) {
+		r.Use(middleware.Authenticate(jwtSecret, authUC))
+		r.Get("/{playbookID}", playbookHandler.GetPlaybook)
+		r.Put("/{playbookID}", playbookHandler.UpdatePlaybook)
+		r.Delete("/{playbookID}", playbookHandler.DeletePlaybook)
+		r.Get("/{playbookID}/plays", playbookHandler.ListPlays)
+		r.Post("/{playbookID}/plays", playbookHandler.CreatePlay)
+	})
+
+	// Play routes
+	r.Route("/api/plays", func(r chi.Router) {
+		r.Use(middleware.Authenticate(jwtSecret, authUC))
+		r.Get("/{playID}", playbookHandler.GetPlay)
+		r.Put("/{playID}", playbookHandler.UpdatePlay)
+		r.Delete("/{playID}", playbookHandler.DeletePlay)
 	})
 
 	log.Println("Server starting on :8080")
