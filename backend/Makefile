@@ -1,10 +1,15 @@
-.PHONY: migrate-up migrate-down dev
+.PHONY: migrate-up migrate-down run
+
+ENV ?= local
+
+-include .env.$(ENV)
+export DATABASE_URL
 
 migrate-up:
-	migrate -path ./migrations -database "postgres://sports_manager:sports_manager@localhost:5432/sports_manager?sslmode=disable" up
+	go run ./cmd/migrate up
 
 migrate-down:
-	migrate -path ./migrations -database "postgres://sports_manager:sports_manager@localhost:5432/sports_manager?sslmode=disable" down
+	go run ./cmd/migrate down
 
-dev:
-	go run cmd/server/main.go
+run:
+	APP_ENV=$(ENV) go run ./cmd/server
