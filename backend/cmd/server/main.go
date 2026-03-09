@@ -35,6 +35,10 @@ func main() {
 	authUC := usecase.NewAuthUsecase(authRepo, jwtSecret)
 	authHandler := handlers.NewAuthHandler(authUC)
 
+	teamRepo := repository.NewTeamRepository(db)
+	teamUC := usecase.NewTeamUsecase(teamRepo)
+	teamHandler := handlers.NewTeamHandler(teamUC)
+
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -67,6 +71,17 @@ func main() {
 			r.Use(middleware.Authenticate(jwtSecret, authUC))
 			r.Get("/me", authHandler.GetUser)
 		})
+	})
+
+	// Team routes (all require authentication)
+	r.Route("/api/teams", func(r chi.Router) {
+		r.Use(middleware.Authenticate(jwtSecret, authUC))
+		r.Get("/", teamHandler.ListTeams)
+		r.Post("/", teamHandler.CreateTeam)
+		r.Get("/{teamID}", teamHandler.GetTeam)
+		r.Put("/{teamID}", teamHandler.UpdateTeam)
+		r.Delete("/{teamID}", teamHandler.DeleteTeam)
+		r.Get("/{teamID}/members", teamHandler.ListMembers)
 	})
 
 	log.Println("Server starting on :8080")
