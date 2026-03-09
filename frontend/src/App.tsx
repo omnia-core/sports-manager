@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import Spinner from './components/ui/Spinner'
 import ProtectedRoute from './components/ui/ProtectedRoute'
+import Layout from './components/ui/Layout'
 import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import AcceptInvitePage from './pages/auth/AcceptInvitePage'
@@ -32,7 +33,9 @@ function AppRoutes() {
         path="/teams"
         element={
           <ProtectedRoute>
-            <TeamsPage />
+            <Layout>
+              <TeamsPage />
+            </Layout>
           </ProtectedRoute>
         }
       />
@@ -40,7 +43,9 @@ function AppRoutes() {
         path="/teams/:teamID"
         element={
           <ProtectedRoute>
-            <TeamDetailPage />
+            <Layout>
+              <TeamDetailPage />
+            </Layout>
           </ProtectedRoute>
         }
       />

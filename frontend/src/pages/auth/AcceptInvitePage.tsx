@@ -53,7 +53,7 @@ function InlineLoginForm({ onSuccess }: { onSuccess: () => void }) {
         required
         autoComplete="current-password"
       />
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-md bg-red-900/30 px-3 py-2 text-sm text-red-300 border border-red-800">{error}</p>}
       <Button type="submit" isLoading={isLoading} className="w-full">
         Sign in and accept invite
       </Button>
@@ -100,10 +100,10 @@ export default function AcceptInvitePage() {
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-        <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-8 shadow-sm text-center">
-          <p className="text-red-600">Invalid invite link — no token provided.</p>
-          <Link to="/login" className="mt-4 inline-block text-sm text-blue-600 hover:underline">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-sm rounded-xl border border-secondary/20 bg-primary p-8 shadow-sm text-center">
+          <p className="text-red-400">Invalid invite link — no token provided.</p>
+          <Link to="/login" className="mt-4 inline-block text-sm text-secondary hover:text-accent">
             Go to login
           </Link>
         </div>
@@ -112,13 +112,13 @@ export default function AcceptInvitePage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm rounded-xl border border-secondary/20 bg-primary p-8 shadow-sm">
         {/* Loading — waiting for auth bootstrap */}
         {authLoading && (
           <div className="flex flex-col items-center gap-4 py-4">
             <Spinner size="lg" />
-            <p className="text-sm text-gray-500">Loading...</p>
+            <p className="text-sm text-foreground/50">Loading...</p>
           </div>
         )}
 
@@ -126,23 +126,23 @@ export default function AcceptInvitePage() {
         {!authLoading && pageState === 'accepting' && (
           <div className="flex flex-col items-center gap-4 py-4">
             <Spinner size="lg" />
-            <p className="text-sm text-gray-500">Accepting your invite...</p>
+            <p className="text-sm text-foreground/50">Accepting your invite...</p>
           </div>
         )}
 
         {/* Success */}
         {pageState === 'success' && (
           <div className="flex flex-col items-center gap-3 py-4 text-center">
-            <p className="text-lg font-semibold text-gray-900">You're in!</p>
-            <p className="text-sm text-gray-500">Redirecting you to your teams...</p>
+            <p className="text-lg font-semibold text-foreground">You're in!</p>
+            <p className="text-sm text-foreground/50">Redirecting you to your teams...</p>
           </div>
         )}
 
         {/* Error */}
         {pageState === 'error' && (
           <div className="flex flex-col gap-4">
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{errorMsg}</p>
-            <Link to="/teams" className="text-center text-sm text-blue-600 hover:underline">
+            <p className="rounded-md bg-red-900/30 px-3 py-2 text-sm text-red-300 border border-red-800">{errorMsg}</p>
+            <Link to="/teams" className="text-center text-sm text-secondary hover:text-accent">
               Go to my teams
             </Link>
           </div>
@@ -151,10 +151,10 @@ export default function AcceptInvitePage() {
         {/* Unauthenticated — show inline login */}
         {!authLoading && !isAuthenticated && pageState === 'login' && (
           <>
-            <h1 className="mb-1 text-2xl font-bold text-gray-900">Accept invite</h1>
-            <p className="mb-6 text-sm text-gray-500">
+            <h1 className="mb-1 text-2xl font-bold text-foreground">Accept invite</h1>
+            <p className="mb-6 text-sm text-foreground/50">
               Sign in to join the team. Don't have an account?{' '}
-              <Link to={`/register`} className="text-blue-600 hover:underline">
+              <Link to={`/register`} className="text-secondary hover:text-accent">
                 Create one
               </Link>
             </p>

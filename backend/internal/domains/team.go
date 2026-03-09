@@ -44,8 +44,8 @@ type TeamRepository interface {
 // MemberWithUser pairs a TeamMember record with its associated User so the
 // frontend can render a roster without issuing extra requests.
 type MemberWithUser struct {
-	Member models.TeamMember
-	User   models.User
+	Member models.TeamMember `json:"member"`
+	User   models.User       `json:"user"`
 }
 
 // ----------------------------------------------------------------------------

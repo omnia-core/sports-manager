@@ -8,11 +8,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses = {
   primary:
-    'bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-500 disabled:bg-blue-300',
+    'bg-secondary text-background hover:bg-accent focus-visible:ring-secondary disabled:opacity-50',
   secondary:
-    'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus-visible:ring-gray-400 disabled:text-gray-400',
+    'bg-primary text-foreground border border-secondary/30 hover:border-secondary focus-visible:ring-secondary disabled:opacity-50',
   danger:
-    'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500 disabled:bg-red-300',
+    'bg-red-900/50 text-red-300 border border-red-700 hover:bg-red-900 focus-visible:ring-red-700 disabled:opacity-50',
 }
 
 export default function Button({

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/omnia-core/sports-manager/backend/internal/domains"
 	"github.com/omnia-core/sports-manager/backend/internal/middleware"
+	"github.com/omnia-core/sports-manager/backend/internal/models"
 	"github.com/omnia-core/sports-manager/backend/internal/repository"
 	"github.com/omnia-core/sports-manager/backend/internal/usecase"
 )
@@ -41,7 +42,11 @@ func (h *TeamHandler) ListTeams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, res.Teams)
+	teams := res.Teams
+	if teams == nil {
+		teams = make([]*models.Team, 0)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"teams": teams})
 }
 
 // --- CreateTeam --------------------------------------------------------
@@ -200,7 +205,11 @@ func (h *TeamHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, res.Members)
+	members := res.Members
+	if members == nil {
+		members = make([]domains.MemberWithUser, 0)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"members": members})
 }
 
 // --- helpers -----------------------------------------------------------

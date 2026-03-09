@@ -32,10 +32,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-1 text-2xl font-bold text-gray-900">Create account</h1>
-        <p className="mb-6 text-sm text-gray-500">Start managing your team today</p>
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm rounded-xl border border-secondary/20 bg-primary p-8 shadow-sm">
+        <h1 className="mb-1 text-2xl font-bold text-foreground">Create account</h1>
+        <p className="mb-6 text-sm text-foreground/50">Start managing your team today</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Input
@@ -68,7 +68,7 @@ export default function RegisterPage() {
           />
 
           {error && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+            <p className="rounded-md bg-red-900/30 px-3 py-2 text-sm text-red-300 border border-red-800">{error}</p>
           )}
 
           <Button type="submit" isLoading={isLoading} className="mt-1 w-full">
@@ -76,9 +76,9 @@ export default function RegisterPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-500">
+        <p className="mt-6 text-center text-sm text-foreground/50">
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-blue-600 hover:underline">
+          <Link to="/login" className="font-medium text-secondary hover:text-accent">
             Sign in
           </Link>
         </p>

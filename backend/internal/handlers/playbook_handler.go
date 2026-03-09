@@ -7,6 +7,7 @@ import (
 
 	"github.com/omnia-core/sports-manager/backend/internal/domains"
 	"github.com/omnia-core/sports-manager/backend/internal/middleware"
+	"github.com/omnia-core/sports-manager/backend/internal/models"
 	"github.com/omnia-core/sports-manager/backend/internal/repository"
 	"github.com/omnia-core/sports-manager/backend/internal/usecase"
 )
@@ -48,7 +49,11 @@ func (h *PlaybookHandler) ListPlaybooks(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, res.Playbooks)
+	playbooks := res.Playbooks
+	if playbooks == nil {
+		playbooks = make([]*models.Playbook, 0)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"playbooks": playbooks})
 }
 
 type createPlaybookRequest struct {
@@ -208,7 +213,11 @@ func (h *PlaybookHandler) ListPlays(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, res.Plays)
+	plays := res.Plays
+	if plays == nil {
+		plays = make([]*models.Play, 0)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"plays": plays})
 }
 
 type createPlayRequest struct {
