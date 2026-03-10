@@ -98,6 +98,7 @@ func (r *authRepository) GetOrCreateGoogleUser(ctx context.Context, req domains.
 		ON CONFLICT (email) DO UPDATE
 			SET google_id  = EXCLUDED.google_id,
 			    avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url)
+		WHERE users.google_id IS NULL
 		RETURNING id, email, password_hash, google_id, name, avatar_url, created_at`
 
 	u := &models.User{}

@@ -2,14 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/omnia-core/sports-manager/backend/internal/domains"
 	"github.com/omnia-core/sports-manager/backend/internal/middleware"
 	"github.com/omnia-core/sports-manager/backend/internal/models"
-	"github.com/omnia-core/sports-manager/backend/internal/repository"
-	"github.com/omnia-core/sports-manager/backend/internal/usecase"
 )
 
 // PlaybookHandler handles all playbook and play HTTP endpoints.
@@ -45,7 +42,7 @@ func (h *PlaybookHandler) ListPlaybooks(w http.ResponseWriter, r *http.Request) 
 		CallerID: caller.ID,
 	})
 	if err != nil {
-		writePlaybookUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -88,7 +85,7 @@ func (h *PlaybookHandler) CreatePlaybook(w http.ResponseWriter, r *http.Request)
 		Description: body.Description,
 	})
 	if err != nil {
-		writePlaybookUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -114,7 +111,7 @@ func (h *PlaybookHandler) GetPlaybook(w http.ResponseWriter, r *http.Request) {
 		CallerID:   caller.ID,
 	})
 	if err != nil {
-		writePlaybookUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -153,7 +150,7 @@ func (h *PlaybookHandler) UpdatePlaybook(w http.ResponseWriter, r *http.Request)
 		Description: body.Description,
 	})
 	if err != nil {
-		writePlaybookUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -179,7 +176,7 @@ func (h *PlaybookHandler) DeletePlaybook(w http.ResponseWriter, r *http.Request)
 		CallerID:   caller.ID,
 	})
 	if err != nil {
-		writePlaybookUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -209,7 +206,7 @@ func (h *PlaybookHandler) ListPlays(w http.ResponseWriter, r *http.Request) {
 		CallerID:   caller.ID,
 	})
 	if err != nil {
-		writePlaybookUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -256,7 +253,7 @@ func (h *PlaybookHandler) CreatePlay(w http.ResponseWriter, r *http.Request) {
 		DiagramJSON: body.DiagramJSON,
 	})
 	if err != nil {
-		writePlaybookUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -282,7 +279,7 @@ func (h *PlaybookHandler) GetPlay(w http.ResponseWriter, r *http.Request) {
 		CallerID: caller.ID,
 	})
 	if err != nil {
-		writePlaybookUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -325,7 +322,7 @@ func (h *PlaybookHandler) UpdatePlay(w http.ResponseWriter, r *http.Request) {
 		DiagramJSON: body.DiagramJSON,
 	})
 	if err != nil {
-		writePlaybookUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -351,33 +348,11 @@ func (h *PlaybookHandler) DeletePlay(w http.ResponseWriter, r *http.Request) {
 		CallerID: caller.ID,
 	})
 	if err != nil {
-		writePlaybookUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// ----------------------------------------------------------------------------
-// helpers
-// ----------------------------------------------------------------------------
-
-// writePlaybookUsecaseError maps playbook domain errors to appropriate HTTP
-// status codes.
-func writePlaybookUsecaseError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, usecase.ErrForbidden):
-		writeJSON(w, http.StatusForbidden, errBody("forbidden"))
-	case errors.Is(err, repository.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, errBody("not found"))
-	default:
-		msg := err.Error()
-		if msg == "playbook name is required" || msg == "play name is required" {
-			writeJSON(w, http.StatusBadRequest, errBody(msg))
-			return
-		}
-		writeJSON(w, http.StatusInternalServerError, errBody("an error occurred"))
-	}
 }
 
 // parseUUIDParam is defined in team_handler.go and is available throughout

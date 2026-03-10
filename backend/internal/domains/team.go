@@ -32,7 +32,6 @@ type TeamRepository interface {
 	ListTeams(ctx context.Context, req ListTeamsRequest) (ListTeamsResponse, error)
 	UpdateTeam(ctx context.Context, req UpdateTeamRequest) (UpdateTeamResponse, error)
 	DeleteTeam(ctx context.Context, req DeleteTeamRequest) (DeleteTeamResponse, error)
-	AddMember(ctx context.Context, req AddMemberRequest) (AddMemberResponse, error)
 	GetMembership(ctx context.Context, req GetMembershipRequest) (GetMembershipResponse, error)
 	ListMembers(ctx context.Context, req ListMembersRequest) (ListMembersResponse, error)
 }

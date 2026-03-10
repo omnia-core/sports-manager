@@ -128,7 +128,7 @@ export default function PlaybookPage() {
   const { playbookID } = useParams<{ playbookID: string }>()
   const navigate = useNavigate()
   const { currentPlaybook, plays, isLoading, fetchPlays, createPlay, deletePlay } = usePlaybookStore()
-  const { currentTeam } = useTeamStore()
+  const { currentTeam, fetchTeam } = useTeamStore()
   const { user } = useAuthStore()
   const [showCreateModal, setShowCreateModal] = useState(false)
 
@@ -136,6 +136,14 @@ export default function PlaybookPage() {
     if (!playbookID) return
     void fetchPlays(playbookID)
   }, [playbookID, fetchPlays])
+
+  // If we navigated directly to this URL (e.g. deep link or page refresh),
+  // currentTeam may not be set. Once the playbook loads, hydrate the team.
+  useEffect(() => {
+    if (currentPlaybook && !currentTeam) {
+      void fetchTeam(currentPlaybook.team_id)
+    }
+  }, [currentPlaybook, currentTeam, fetchTeam])
 
   const isCoach = currentTeam?.coach_id === user?.id
 

@@ -13,6 +13,10 @@ import (
 	"github.com/omnia-core/sports-manager/backend/internal/repository"
 )
 
+// ErrInvalidCredentials is returned when email/password authentication fails.
+// Using a sentinel avoids fragile string-matching in the handler layer.
+var ErrInvalidCredentials = errors.New("invalid credentials")
+
 // authUsecase is the concrete implementation of domains.AuthUsecase.
 type authUsecase struct {
 	repo      domains.AuthRepository
@@ -31,6 +35,10 @@ func (u *authUsecase) Register(ctx context.Context, req domains.RegisterRequest)
 
 	if req.Email == "" || req.Name == "" {
 		return domains.RegisterResponse{}, fmt.Errorf("email and name are required")
+	}
+	// SEC-04: basic email format validation — must contain '@' and a '.' after it.
+	if at := strings.Index(req.Email, "@"); at < 1 || !strings.Contains(req.Email[at:], ".") {
+		return domains.RegisterResponse{}, fmt.Errorf("email address is invalid")
 	}
 	if len(req.Password) < 8 {
 		return domains.RegisterResponse{}, fmt.Errorf("password must be at least 8 characters")
@@ -69,14 +77,14 @@ func (u *authUsecase) Login(ctx context.Context, req domains.LoginRequest) (doma
 	found, err := u.repo.GetUserByEmail(ctx, domains.GetUserByEmailRequest{Email: req.Email})
 	if errors.Is(err, repository.ErrNotFound) {
 		// Deliberately vague to prevent user enumeration.
-		return domains.LoginResponse{}, fmt.Errorf("invalid credentials")
+		return domains.LoginResponse{}, ErrInvalidCredentials
 	}
 	if err != nil {
 		return domains.LoginResponse{}, fmt.Errorf("get user: %w", err)
 	}
 
 	if found.User.PasswordHash == nil || !auth.CheckPassword(*found.User.PasswordHash, req.Password) {
-		return domains.LoginResponse{}, fmt.Errorf("invalid credentials")
+		return domains.LoginResponse{}, ErrInvalidCredentials
 	}
 
 	accessToken, refreshToken, err := u.issueTokenPair(ctx, found.User.ID)

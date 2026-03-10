@@ -32,7 +32,6 @@ type InviteRepository interface {
 	CreateInvite(ctx context.Context, req CreateInviteRequest) (CreateInviteResponse, error)
 	GetInviteByToken(ctx context.Context, req GetInviteByTokenRequest) (GetInviteByTokenResponse, error)
 	GetInviteByTeamAndEmail(ctx context.Context, req GetInviteByTeamAndEmailRequest) (GetInviteByTeamAndEmailResponse, error)
-	UpdateInviteStatus(ctx context.Context, req UpdateInviteStatusRequest) (UpdateInviteStatusResponse, error)
 	// AcceptInviteAtomic adds the user to team_members and marks the invite
 	// accepted within a single database transaction. The transaction is managed
 	// entirely inside this method so the usecase stays free of *sql.Tx wiring.
@@ -77,15 +76,6 @@ type GetInviteByTeamAndEmailRequest struct {
 }
 
 type GetInviteByTeamAndEmailResponse struct {
-	Invite *models.TeamInvite
-}
-
-type UpdateInviteStatusRequest struct {
-	InviteID uuid.UUID
-	Status   string
-}
-
-type UpdateInviteStatusResponse struct {
 	Invite *models.TeamInvite
 }
 

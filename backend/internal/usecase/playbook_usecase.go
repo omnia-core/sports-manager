@@ -31,10 +31,10 @@ func NewPlaybookUsecase(repo domains.PlaybookRepository, teamRepo domains.TeamRe
 func (u *playbookUsecase) CreatePlaybook(ctx context.Context, req domains.CreatePlaybookRequest) (domains.CreatePlaybookResponse, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		return domains.CreatePlaybookResponse{}, fmt.Errorf("playbook name is required")
+		return domains.CreatePlaybookResponse{}, ErrNameRequired
 	}
 
-	if err := u.requireCoachOnTeam(ctx, req.TeamID, req.CallerID); err != nil {
+	if err := requireCoach(ctx, u.teamRepo, req.TeamID, req.CallerID); err != nil {
 		return domains.CreatePlaybookResponse{}, err
 	}
 
@@ -56,7 +56,7 @@ func (u *playbookUsecase) GetPlaybook(ctx context.Context, req domains.GetPlaybo
 		return domains.GetPlaybookResponse{}, fmt.Errorf("get playbook: %w", err)
 	}
 
-	if err := u.requireMemberOnTeam(ctx, pbRes.Playbook.TeamID, req.CallerID); err != nil {
+	if err := requireMember(ctx, u.teamRepo, pbRes.Playbook.TeamID, req.CallerID); err != nil {
 		return domains.GetPlaybookResponse{}, err
 	}
 
@@ -66,7 +66,7 @@ func (u *playbookUsecase) GetPlaybook(ctx context.Context, req domains.GetPlaybo
 // ListPlaybooks verifies the caller is a member of the team, then returns all
 // playbooks for that team.
 func (u *playbookUsecase) ListPlaybooks(ctx context.Context, req domains.ListPlaybooksRequest) (domains.ListPlaybooksResponse, error) {
-	if err := u.requireMemberOnTeam(ctx, req.TeamID, req.CallerID); err != nil {
+	if err := requireMember(ctx, u.teamRepo, req.TeamID, req.CallerID); err != nil {
 		return domains.ListPlaybooksResponse{}, err
 	}
 
@@ -85,7 +85,7 @@ func (u *playbookUsecase) UpdatePlaybook(ctx context.Context, req domains.Update
 		return domains.UpdatePlaybookResponse{}, err
 	}
 
-	if err := u.requireCoachOnTeam(ctx, teamID, req.CallerID); err != nil {
+	if err := requireCoach(ctx, u.teamRepo, teamID, req.CallerID); err != nil {
 		return domains.UpdatePlaybookResponse{}, err
 	}
 
@@ -107,7 +107,7 @@ func (u *playbookUsecase) DeletePlaybook(ctx context.Context, req domains.Delete
 		return domains.DeletePlaybookResponse{}, err
 	}
 
-	if err := u.requireCoachOnTeam(ctx, teamID, req.CallerID); err != nil {
+	if err := requireCoach(ctx, u.teamRepo, teamID, req.CallerID); err != nil {
 		return domains.DeletePlaybookResponse{}, err
 	}
 
@@ -130,7 +130,7 @@ func (u *playbookUsecase) DeletePlaybook(ctx context.Context, req domains.Delete
 func (u *playbookUsecase) CreatePlay(ctx context.Context, req domains.CreatePlayRequest) (domains.CreatePlayResponse, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		return domains.CreatePlayResponse{}, fmt.Errorf("play name is required")
+		return domains.CreatePlayResponse{}, ErrNameRequired
 	}
 	if req.Category == "" {
 		req.Category = "offense"
@@ -141,7 +141,7 @@ func (u *playbookUsecase) CreatePlay(ctx context.Context, req domains.CreatePlay
 		return domains.CreatePlayResponse{}, err
 	}
 
-	if err := u.requireCoachOnTeam(ctx, teamID, req.CallerID); err != nil {
+	if err := requireCoach(ctx, u.teamRepo, teamID, req.CallerID); err != nil {
 		return domains.CreatePlayResponse{}, err
 	}
 
@@ -168,7 +168,7 @@ func (u *playbookUsecase) GetPlay(ctx context.Context, req domains.GetPlayReques
 		return domains.GetPlayResponse{}, err
 	}
 
-	if err := u.requireMemberOnTeam(ctx, teamID, req.CallerID); err != nil {
+	if err := requireMember(ctx, u.teamRepo, teamID, req.CallerID); err != nil {
 		return domains.GetPlayResponse{}, err
 	}
 
@@ -183,7 +183,7 @@ func (u *playbookUsecase) ListPlays(ctx context.Context, req domains.ListPlaysRe
 		return domains.ListPlaysResponse{}, err
 	}
 
-	if err := u.requireMemberOnTeam(ctx, teamID, req.CallerID); err != nil {
+	if err := requireMember(ctx, u.teamRepo, teamID, req.CallerID); err != nil {
 		return domains.ListPlaysResponse{}, err
 	}
 
@@ -210,7 +210,7 @@ func (u *playbookUsecase) UpdatePlay(ctx context.Context, req domains.UpdatePlay
 		return domains.UpdatePlayResponse{}, err
 	}
 
-	if err := u.requireCoachOnTeam(ctx, teamID, req.CallerID); err != nil {
+	if err := requireCoach(ctx, u.teamRepo, teamID, req.CallerID); err != nil {
 		return domains.UpdatePlayResponse{}, err
 	}
 
@@ -240,7 +240,7 @@ func (u *playbookUsecase) DeletePlay(ctx context.Context, req domains.DeletePlay
 		return domains.DeletePlayResponse{}, err
 	}
 
-	if err := u.requireCoachOnTeam(ctx, teamID, req.CallerID); err != nil {
+	if err := requireCoach(ctx, u.teamRepo, teamID, req.CallerID); err != nil {
 		return domains.DeletePlayResponse{}, err
 	}
 
@@ -269,38 +269,4 @@ func (u *playbookUsecase) teamIDForPlaybook(ctx context.Context, playbookID uuid
 		return uuid.Nil, fmt.Errorf("look up playbook: %w", err)
 	}
 	return pbRes.Playbook.TeamID, nil
-}
-
-// requireMemberOnTeam returns ErrForbidden if the caller is not a member of teamID.
-func (u *playbookUsecase) requireMemberOnTeam(ctx context.Context, teamID, callerID uuid.UUID) error {
-	_, err := u.teamRepo.GetMembership(ctx, domains.GetMembershipRequest{
-		TeamID: teamID,
-		UserID: callerID,
-	})
-	if errors.Is(err, repository.ErrNotFound) {
-		return ErrForbidden
-	}
-	if err != nil {
-		return fmt.Errorf("check membership: %w", err)
-	}
-	return nil
-}
-
-// requireCoachOnTeam returns ErrForbidden unless the caller holds the "coach"
-// role on teamID.
-func (u *playbookUsecase) requireCoachOnTeam(ctx context.Context, teamID, callerID uuid.UUID) error {
-	res, err := u.teamRepo.GetMembership(ctx, domains.GetMembershipRequest{
-		TeamID: teamID,
-		UserID: callerID,
-	})
-	if errors.Is(err, repository.ErrNotFound) {
-		return ErrForbidden
-	}
-	if err != nil {
-		return fmt.Errorf("check membership: %w", err)
-	}
-	if res.Member.Role != "coach" {
-		return ErrForbidden
-	}
-	return nil
 }

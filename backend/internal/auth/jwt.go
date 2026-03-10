@@ -62,7 +62,7 @@ func ValidateToken(tokenStr, secret string) (*Claims, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return []byte(secret), nil
-	})
+	}, jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, fmt.Errorf("parse token: %w", err)
 	}

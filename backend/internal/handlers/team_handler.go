@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -10,8 +9,6 @@ import (
 	"github.com/omnia-core/sports-manager/backend/internal/domains"
 	"github.com/omnia-core/sports-manager/backend/internal/middleware"
 	"github.com/omnia-core/sports-manager/backend/internal/models"
-	"github.com/omnia-core/sports-manager/backend/internal/repository"
-	"github.com/omnia-core/sports-manager/backend/internal/usecase"
 )
 
 // TeamHandler handles all team HTTP endpoints.
@@ -76,7 +73,7 @@ func (h *TeamHandler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		CoachID: caller.ID,
 	})
 	if err != nil {
-		writeTeamUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -104,7 +101,7 @@ func (h *TeamHandler) GetTeam(w http.ResponseWriter, r *http.Request) {
 		CallerID: caller.ID,
 	})
 	if err != nil {
-		writeTeamUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -145,7 +142,7 @@ func (h *TeamHandler) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 		LogoURL:  body.LogoURL,
 	})
 	if err != nil {
-		writeTeamUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -173,7 +170,7 @@ func (h *TeamHandler) DeleteTeam(w http.ResponseWriter, r *http.Request) {
 		CallerID: caller.ID,
 	})
 	if err != nil {
-		writeTeamUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -201,7 +198,7 @@ func (h *TeamHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		CallerID: caller.ID,
 	})
 	if err != nil {
-		writeTeamUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -217,21 +214,4 @@ func (h *TeamHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 // parseUUIDParam extracts and parses a named chi URL parameter as a UUID.
 func parseUUIDParam(r *http.Request, param string) (uuid.UUID, error) {
 	return uuid.Parse(chi.URLParam(r, param))
-}
-
-// writeTeamUsecaseError maps team domain errors to appropriate HTTP status codes.
-func writeTeamUsecaseError(w http.ResponseWriter, err error) {
-	if errors.Is(err, usecase.ErrForbidden) {
-		writeJSON(w, http.StatusForbidden, errBody("forbidden"))
-		return
-	}
-	if errors.Is(err, repository.ErrNotFound) {
-		writeJSON(w, http.StatusNotFound, errBody("not found"))
-		return
-	}
-	if err.Error() == "team name is required" {
-		writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
-		return
-	}
-	writeJSON(w, http.StatusInternalServerError, errBody("an error occurred"))
 }

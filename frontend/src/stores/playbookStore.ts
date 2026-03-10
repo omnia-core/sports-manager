@@ -50,10 +50,14 @@ export const usePlaybookStore = create<PlaybookState>((set) => ({
   },
 
   async fetchPlays(playbookID: string) {
-    set({ isLoading: true })
+    // Clear stale data immediately so the previous playbook's content
+    // is not shown while the new fetch is in flight.
+    set({ isLoading: true, currentPlaybook: null, plays: [] })
     try {
-      const playbook = await playbooksApi.get(playbookID)
-      const { plays } = await playbooksApi.listPlays(playbookID)
+      const [playbook, { plays }] = await Promise.all([
+        playbooksApi.get(playbookID),
+        playbooksApi.listPlays(playbookID),
+      ])
       set({ currentPlaybook: playbook, plays })
     } finally {
       set({ isLoading: false })
@@ -86,7 +90,9 @@ export const usePlaybookStore = create<PlaybookState>((set) => ({
   },
 
   async fetchPlay(playID: string) {
-    set({ isLoading: true })
+    // Clear stale data immediately so the previous play's content
+    // is not shown while the new fetch is in flight.
+    set({ isLoading: true, currentPlay: null, currentPlaybook: null })
     try {
       const play = await playbooksApi.getPlay(playID)
       const playbook = await playbooksApi.get(play.playbook_id)

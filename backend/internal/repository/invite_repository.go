@@ -6,9 +6,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lib/pq"
 	"github.com/omnia-core/sports-manager/backend/internal/domains"
 	"github.com/omnia-core/sports-manager/backend/internal/models"
 )
+
+// ErrAlreadyMember is returned when the user is already a member of the team.
+var ErrAlreadyMember = errors.New("user is already a member of this team")
 
 // inviteRepository is the concrete PostgreSQL implementation of domains.InviteRepository.
 //
@@ -103,37 +107,16 @@ func (r *inviteRepository) GetInviteByTeamAndEmail(ctx context.Context, req doma
 	return domains.GetInviteByTeamAndEmailResponse{Invite: inv}, nil
 }
 
-// UpdateInviteStatus sets a new status on the given invite and returns the
-// updated record.
-func (r *inviteRepository) UpdateInviteStatus(ctx context.Context, req domains.UpdateInviteStatusRequest) (domains.UpdateInviteStatusResponse, error) {
-	const q = `
-		UPDATE team_invites
-		SET status = $1
-		WHERE id = $2
-		RETURNING id, team_id, email, token, status, expires_at, created_at`
-
-	inv := &models.TeamInvite{}
-	err := r.db.QueryRowContext(ctx, q, req.Status, req.InviteID).Scan(
-		&inv.ID,
-		&inv.TeamID,
-		&inv.Email,
-		&inv.Token,
-		&inv.Status,
-		&inv.ExpiresAt,
-		&inv.CreatedAt,
-	)
-	if errors.Is(err, sql.ErrNoRows) {
-		return domains.UpdateInviteStatusResponse{}, ErrNotFound
-	}
-	if err != nil {
-		return domains.UpdateInviteStatusResponse{}, fmt.Errorf("update invite status: %w", err)
-	}
-	return domains.UpdateInviteStatusResponse{Invite: inv}, nil
-}
-
 // AcceptInviteAtomic inserts a team_members row for the accepting user and
 // marks the invite as accepted, all within a single transaction. If either
 // write fails the transaction is rolled back and an error is returned.
+//
+// The UPDATE re-checks expires_at inside the transaction to close the
+// TOCTOU window between the usecase's expiry check and this write. If 0
+// rows are updated, the invite has expired concurrently and ErrInviteInvalid
+// is returned (mapped from the usecase sentinel in the handler).
+//
+// If the user is already a member of the team, ErrAlreadyMember is returned.
 func (r *inviteRepository) AcceptInviteAtomic(ctx context.Context, req domains.AcceptInviteAtomicRequest) (domains.AcceptInviteAtomicResponse, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -147,12 +130,32 @@ func (r *inviteRepository) AcceptInviteAtomic(ctx context.Context, req domains.A
 		Role:   "player",
 	})
 	if err != nil {
+		// Unique constraint violation: user is already on this team.
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return domains.AcceptInviteAtomicResponse{}, ErrAlreadyMember
+		}
 		return domains.AcceptInviteAtomicResponse{}, fmt.Errorf("add team member: %w", err)
 	}
 
-	const updateQ = `UPDATE team_invites SET status = 'accepted' WHERE id = $1`
-	if _, err := tx.ExecContext(ctx, updateQ, req.InviteID); err != nil {
+	// Re-check expiry atomically inside the transaction to close the TOCTOU
+	// window between the usecase's pre-check and this write.
+	const updateQ = `
+		UPDATE team_invites
+		SET status = 'accepted'
+		WHERE id = $1
+		  AND expires_at > NOW()`
+	res, err := tx.ExecContext(ctx, updateQ, req.InviteID)
+	if err != nil {
 		return domains.AcceptInviteAtomicResponse{}, fmt.Errorf("mark invite accepted: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return domains.AcceptInviteAtomicResponse{}, fmt.Errorf("mark invite accepted rows affected: %w", err)
+	}
+	if n == 0 {
+		// Invite expired between the usecase check and this transaction.
+		return domains.AcceptInviteAtomicResponse{}, ErrInviteExpiredInTx
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -160,3 +163,8 @@ func (r *inviteRepository) AcceptInviteAtomic(ctx context.Context, req domains.A
 	}
 	return domains.AcceptInviteAtomicResponse{Member: m}, nil
 }
+
+// ErrInviteExpiredInTx is returned by AcceptInviteAtomic when the invite
+// expired between the usecase's pre-check and the atomic UPDATE inside the
+// transaction. The invite handler maps this to ErrInviteInvalid.
+var ErrInviteExpiredInTx = errors.New("invite expired")

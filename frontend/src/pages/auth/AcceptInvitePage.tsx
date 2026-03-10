@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { post } from '../../api/client'
 import { authApi } from '../../api/auth'
@@ -75,6 +75,8 @@ export default function AcceptInvitePage() {
 
   const [pageState, setPageState] = useState<PageState>('login')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  // Guard against React StrictMode double-invocation of the accept effect.
+  const acceptedRef = useRef(false)
 
   async function acceptInvite() {
     setPageState('accepting')
@@ -90,10 +92,12 @@ export default function AcceptInvitePage() {
     }
   }
 
-  // Once we know the user is authenticated, accept immediately
+  // Once we know the user is authenticated, accept immediately.
+  // The ref guard prevents a double POST in React StrictMode.
   useEffect(() => {
-    if (!authLoading && isAuthenticated && token) {
-      acceptInvite()
+    if (!authLoading && isAuthenticated && token && !acceptedRef.current) {
+      acceptedRef.current = true
+      void acceptInvite()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, isAuthenticated])

@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/omnia-core/sports-manager/backend/internal/auth"
 	"github.com/omnia-core/sports-manager/backend/internal/domains"
@@ -43,12 +42,44 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Name:     req.Name,
 	})
 	if err != nil {
-		writeUsecaseError(w, err)
+		writeRegisterError(w, err)
 		return
 	}
 
 	setTokenCookies(w, r, res.AccessToken, res.RefreshToken)
 	writeJSON(w, http.StatusCreated, res.User)
+}
+
+// writeRegisterError handles the specific error cases for registration,
+// including DB unique violations (duplicate email), before falling through
+// to the shared writeUsecaseError for everything else.
+func writeRegisterError(w http.ResponseWriter, err error) {
+	msg := err.Error()
+	// Catch DB-level unique constraint violations on email.
+	if containsAny(msg, "already in use", "duplicate", "unique") {
+		writeJSON(w, http.StatusConflict, errBody("email already in use"))
+		return
+	}
+	// Validation errors returned as plain fmt.Errorf strings.
+	if containsAny(msg, "required", "at least", "invalid") {
+		writeJSON(w, http.StatusBadRequest, errBody(msg))
+		return
+	}
+	writeUsecaseError(w, err)
+}
+
+// containsAny reports whether s contains any of the given substrings.
+func containsAny(s string, substrings ...string) bool {
+	for _, sub := range substrings {
+		if len(s) >= len(sub) {
+			for i := 0; i <= len(s)-len(sub); i++ {
+				if s[i:i+len(sub)] == sub {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // --- Login -------------------------------------------------------------
@@ -71,12 +102,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Password: req.Password,
 	})
 	if err != nil {
-		// "invalid credentials" maps to 401; everything else is 500.
-		if strings.Contains(err.Error(), "invalid credentials") {
-			writeJSON(w, http.StatusUnauthorized, errBody(err.Error()))
-			return
-		}
-		writeJSON(w, http.StatusInternalServerError, errBody("login failed"))
+		// ErrInvalidCredentials is handled by the shared writeUsecaseError.
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -98,8 +125,9 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		RawRefreshToken: cookie.Value,
 	})
 	if err != nil {
+		// SEC-03: do not expose internal error details to the client.
 		pkgcookie.ClearTokenCookies(w, r)
-		writeJSON(w, http.StatusUnauthorized, errBody(err.Error()))
+		writeJSON(w, http.StatusUnauthorized, errBody("token refresh failed"))
 		return
 	}
 
@@ -139,26 +167,10 @@ func (h *AuthHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 // --- helpers -----------------------------------------------------------
 
-// writeUsecaseError maps known usecase error strings to appropriate HTTP status codes.
-func writeUsecaseError(w http.ResponseWriter, err error) {
-	msg := err.Error()
-	switch {
-	case strings.Contains(msg, "already in use"),
-		strings.Contains(msg, "duplicate"),
-		strings.Contains(msg, "unique"):
-		writeJSON(w, http.StatusConflict, errBody("email already in use"))
-	case strings.Contains(msg, "required"),
-		strings.Contains(msg, "at least"):
-		writeJSON(w, http.StatusBadRequest, errBody(msg))
-	default:
-		writeJSON(w, http.StatusInternalServerError, errBody("an error occurred"))
-	}
-}
-
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(body)
+	json.NewEncoder(w).Encode(body) //nolint:errcheck
 }
 
 func errBody(msg string) map[string]string {

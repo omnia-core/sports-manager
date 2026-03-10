@@ -6,13 +6,18 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/omnia-core/sports-manager/backend/internal/domains"
 	"github.com/omnia-core/sports-manager/backend/internal/repository"
 )
 
 // ErrForbidden is returned when the caller lacks the required role.
 var ErrForbidden = errors.New("forbidden")
+
+// ErrNameRequired is returned when a required name field is empty.
+var ErrNameRequired = errors.New("name is required")
+
+// ErrAlreadyMember is returned when the user is already a member of the team.
+var ErrAlreadyMember = errors.New("user is already a member of this team")
 
 // teamUsecase is the concrete implementation of domains.TeamUsecase.
 type teamUsecase struct {
@@ -29,7 +34,7 @@ func NewTeamUsecase(repo domains.TeamRepository) domains.TeamUsecase {
 func (u *teamUsecase) CreateTeam(ctx context.Context, req domains.CreateTeamRequest) (domains.CreateTeamResponse, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		return domains.CreateTeamResponse{}, fmt.Errorf("team name is required")
+		return domains.CreateTeamResponse{}, ErrNameRequired
 	}
 	if req.Sport == "" {
 		req.Sport = "basketball"
@@ -44,7 +49,7 @@ func (u *teamUsecase) CreateTeam(ctx context.Context, req domains.CreateTeamRequ
 
 // GetTeam verifies the caller is a team member before returning the team.
 func (u *teamUsecase) GetTeam(ctx context.Context, req domains.GetTeamRequest) (domains.GetTeamResponse, error) {
-	if err := u.requireMember(ctx, req.TeamID, req.CallerID); err != nil {
+	if err := requireMember(ctx, u.repo, req.TeamID, req.CallerID); err != nil {
 		return domains.GetTeamResponse{}, err
 	}
 
@@ -69,7 +74,7 @@ func (u *teamUsecase) ListTeams(ctx context.Context, req domains.ListTeamsReques
 
 // UpdateTeam verifies the caller is a coach on this team before applying updates.
 func (u *teamUsecase) UpdateTeam(ctx context.Context, req domains.UpdateTeamRequest) (domains.UpdateTeamResponse, error) {
-	if err := u.requireCoach(ctx, req.TeamID, req.CallerID); err != nil {
+	if err := requireCoach(ctx, u.repo, req.TeamID, req.CallerID); err != nil {
 		return domains.UpdateTeamResponse{}, err
 	}
 
@@ -85,7 +90,7 @@ func (u *teamUsecase) UpdateTeam(ctx context.Context, req domains.UpdateTeamRequ
 
 // DeleteTeam verifies the caller is a coach on this team before deleting it.
 func (u *teamUsecase) DeleteTeam(ctx context.Context, req domains.DeleteTeamRequest) (domains.DeleteTeamResponse, error) {
-	if err := u.requireCoach(ctx, req.TeamID, req.CallerID); err != nil {
+	if err := requireCoach(ctx, u.repo, req.TeamID, req.CallerID); err != nil {
 		return domains.DeleteTeamResponse{}, err
 	}
 
@@ -101,7 +106,7 @@ func (u *teamUsecase) DeleteTeam(ctx context.Context, req domains.DeleteTeamRequ
 
 // ListMembers verifies the caller is a team member, then returns the full roster.
 func (u *teamUsecase) ListMembers(ctx context.Context, req domains.ListMembersRequest) (domains.ListMembersResponse, error) {
-	if err := u.requireMember(ctx, req.TeamID, req.CallerID); err != nil {
+	if err := requireMember(ctx, u.repo, req.TeamID, req.CallerID); err != nil {
 		return domains.ListMembersResponse{}, err
 	}
 
@@ -110,37 +115,4 @@ func (u *teamUsecase) ListMembers(ctx context.Context, req domains.ListMembersRe
 		return domains.ListMembersResponse{}, fmt.Errorf("list members: %w", err)
 	}
 	return res, nil
-}
-
-// requireMember returns ErrForbidden if the caller is not a member of teamID.
-func (u *teamUsecase) requireMember(ctx context.Context, teamID, callerID uuid.UUID) error {
-	_, err := u.repo.GetMembership(ctx, domains.GetMembershipRequest{
-		TeamID: teamID,
-		UserID: callerID,
-	})
-	if errors.Is(err, repository.ErrNotFound) {
-		return ErrForbidden
-	}
-	if err != nil {
-		return fmt.Errorf("check membership: %w", err)
-	}
-	return nil
-}
-
-// requireCoach returns ErrForbidden unless the caller holds the "coach" role on teamID.
-func (u *teamUsecase) requireCoach(ctx context.Context, teamID, callerID uuid.UUID) error {
-	res, err := u.repo.GetMembership(ctx, domains.GetMembershipRequest{
-		TeamID: teamID,
-		UserID: callerID,
-	})
-	if errors.Is(err, repository.ErrNotFound) {
-		return ErrForbidden
-	}
-	if err != nil {
-		return fmt.Errorf("check membership: %w", err)
-	}
-	if res.Member.Role != "coach" {
-		return ErrForbidden
-	}
-	return nil
 }

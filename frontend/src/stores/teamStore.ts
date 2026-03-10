@@ -7,6 +7,8 @@ interface TeamState {
   currentTeam: Team | null
   members: MemberWithUser[]
   isLoading: boolean
+  isTeamLoading: boolean
+  isMembersLoading: boolean
   fetchTeams(): Promise<void>
   fetchTeam(teamID: string): Promise<void>
   createTeam(data: { name: string; sport: string }): Promise<Team>
@@ -19,6 +21,8 @@ export const useTeamStore = create<TeamState>((set) => ({
   currentTeam: null,
   members: [],
   isLoading: false,
+  isTeamLoading: false,
+  isMembersLoading: false,
 
   async fetchTeams() {
     set({ isLoading: true })
@@ -31,12 +35,12 @@ export const useTeamStore = create<TeamState>((set) => ({
   },
 
   async fetchTeam(teamID: string) {
-    set({ isLoading: true })
+    set({ isTeamLoading: true })
     try {
       const team = await teamsApi.get(teamID)
       set({ currentTeam: team })
     } finally {
-      set({ isLoading: false })
+      set({ isTeamLoading: false })
     }
   },
 
@@ -47,8 +51,13 @@ export const useTeamStore = create<TeamState>((set) => ({
   },
 
   async fetchMembers(teamID: string) {
-    const { members } = await teamsApi.listMembers(teamID)
-    set({ members })
+    set({ isMembersLoading: true })
+    try {
+      const { members } = await teamsApi.listMembers(teamID)
+      set({ members })
+    } finally {
+      set({ isMembersLoading: false })
+    }
   },
 
   async inviteMember(teamID: string, email: string) {

@@ -241,7 +241,7 @@ export default function PlayEditorPage() {
   const { playID } = useParams<{ playID: string }>()
   const navigate = useNavigate()
   const { currentPlay, currentPlaybook, isLoading, fetchPlay, savePlay } = usePlaybookStore()
-  const { currentTeam } = useTeamStore()
+  const { currentTeam, fetchTeam } = useTeamStore()
   const { user } = useAuthStore()
 
   const [diagram, setDiagram] = useState<DiagramJSON>(emptyDiagram())
@@ -268,9 +268,17 @@ export default function PlayEditorPage() {
     }
   }, [currentPlay])
 
+  // If we navigated directly to this URL (e.g. deep link or page refresh),
+  // currentTeam may not be set. Once the playbook loads, hydrate the team.
+  useEffect(() => {
+    if (currentPlaybook && !currentTeam) {
+      void fetchTeam(currentPlaybook.team_id)
+    }
+  }, [currentPlaybook, currentTeam, fetchTeam])
+
   // ── Helpers ──────────────────────────────────────────────────────────────
   function nextID(prefix: string): string {
-    return `${prefix}${Date.now()}`
+    return `${prefix}${crypto.randomUUID()}`
   }
 
   function playerCenter(playerID: string): { x: number; y: number } | null {

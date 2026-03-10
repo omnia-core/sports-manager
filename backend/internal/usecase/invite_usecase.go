@@ -9,6 +9,7 @@ import (
 
 	"github.com/omnia-core/sports-manager/backend/internal/domains"
 	"github.com/omnia-core/sports-manager/backend/internal/mailer"
+	"github.com/omnia-core/sports-manager/backend/internal/models"
 	"github.com/omnia-core/sports-manager/backend/internal/repository"
 )
 
@@ -24,14 +25,14 @@ var ErrInviteInvalid = errors.New("invite is invalid or has expired")
 type inviteUsecase struct {
 	inviteRepo domains.InviteRepository
 	teamRepo   domains.TeamRepository
-	mailer     *mailer.Mailer
+	mailer     mailer.Sender
 }
 
 // NewInviteUsecase constructs an InviteUsecase with all required dependencies.
 func NewInviteUsecase(
 	inviteRepo domains.InviteRepository,
 	teamRepo domains.TeamRepository,
-	m *mailer.Mailer,
+	m mailer.Sender,
 ) domains.InviteUsecase {
 	return &inviteUsecase{
 		inviteRepo: inviteRepo,
@@ -60,7 +61,7 @@ func (u *inviteUsecase) CreateInvite(ctx context.Context, req domains.CreateInvi
 	if err != nil {
 		return domains.CreateInviteResponse{}, fmt.Errorf("check membership: %w", err)
 	}
-	if memberRes.Member.Role != "coach" {
+	if memberRes.Member.Role != models.RoleCoach {
 		return domains.CreateInviteResponse{}, ErrForbidden
 	}
 
@@ -72,7 +73,7 @@ func (u *inviteUsecase) CreateInvite(ctx context.Context, req domains.CreateInvi
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return domains.CreateInviteResponse{}, fmt.Errorf("check existing invite: %w", err)
 	}
-	if err == nil && existing.Invite.Status == "pending" && existing.Invite.ExpiresAt.After(time.Now()) {
+	if err == nil && existing.Invite.Status == models.InviteStatusPending && existing.Invite.ExpiresAt.After(time.Now()) {
 		return domains.CreateInviteResponse{}, ErrInviteAlreadyPending
 	}
 
@@ -88,7 +89,7 @@ func (u *inviteUsecase) CreateInvite(ctx context.Context, req domains.CreateInvi
 		return domains.CreateInviteResponse{}, fmt.Errorf("get team: %w", err)
 	}
 
-	// Persist invite.
+	// Persist invite — forward only the fields the repository needs.
 	createRes, err := u.inviteRepo.CreateInvite(ctx, domains.CreateInviteRequest{
 		TeamID: req.TeamID,
 		Email:  req.Email,
@@ -118,7 +119,7 @@ func (u *inviteUsecase) AcceptInvite(ctx context.Context, req domains.AcceptInvi
 	}
 
 	inv := invRes.Invite
-	if inv.Status != "pending" || !inv.ExpiresAt.After(time.Now()) {
+	if inv.Status != models.InviteStatusPending || !inv.ExpiresAt.After(time.Now()) {
 		return domains.AcceptInviteResponse{}, ErrInviteInvalid
 	}
 
@@ -129,6 +130,12 @@ func (u *inviteUsecase) AcceptInvite(ctx context.Context, req domains.AcceptInvi
 		ExpiresAt: inv.ExpiresAt,
 	})
 	if err != nil {
+		if errors.Is(err, repository.ErrAlreadyMember) {
+			return domains.AcceptInviteResponse{}, ErrAlreadyMember
+		}
+		if errors.Is(err, repository.ErrInviteExpiredInTx) {
+			return domains.AcceptInviteResponse{}, ErrInviteInvalid
+		}
 		return domains.AcceptInviteResponse{}, fmt.Errorf("accept invite: %w", err)
 	}
 

@@ -205,26 +205,6 @@ func (r *teamRepository) DeleteTeam(ctx context.Context, req domains.DeleteTeamR
 	return domains.DeleteTeamResponse{}, nil
 }
 
-// AddMember inserts a new team_members row. This is exposed for future use
-// (e.g. invite acceptance); internal transaction use goes through insertMember.
-func (r *teamRepository) AddMember(ctx context.Context, req domains.AddMemberRequest) (domains.AddMemberResponse, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return domains.AddMemberResponse{}, fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback() //nolint:errcheck
-
-	m, err := insertMember(ctx, tx, req)
-	if err != nil {
-		return domains.AddMemberResponse{}, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return domains.AddMemberResponse{}, fmt.Errorf("commit transaction: %w", err)
-	}
-	return domains.AddMemberResponse{Member: m}, nil
-}
-
 // GetMembership returns a single team_members row for the given team+user pair,
 // or ErrNotFound if no membership exists.
 func (r *teamRepository) GetMembership(ctx context.Context, req domains.GetMembershipRequest) (domains.GetMembershipResponse, error) {

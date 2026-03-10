@@ -19,6 +19,13 @@ type Config struct {
 	AppURL   string // base URL for invite links, e.g. http://localhost:5173
 }
 
+// Sender is the interface for sending transactional emails.
+// Depend on this interface rather than *Mailer directly so callers remain
+// testable without a real SMTP connection.
+type Sender interface {
+	SendInvite(ctx context.Context, toEmail, teamName, inviteToken string) error
+}
+
 // Mailer sends transactional emails via SMTP.
 type Mailer struct {
 	cfg Config
@@ -36,7 +43,8 @@ func NewMailer(cfg Config) *Mailer {
 // an SMTP server configured.
 func (m *Mailer) SendInvite(ctx context.Context, toEmail, teamName, inviteToken string) error {
 	if m.cfg.Host == "" {
-		log.Printf("mailer: SMTP not configured — skipping invite email to %s (token: %s)", toEmail, inviteToken)
+		// SEC-06: do not log the raw invite token — it is a secret.
+		log.Printf("mailer: SMTP not configured — skipping invite email to %s", toEmail)
 		return nil
 	}
 

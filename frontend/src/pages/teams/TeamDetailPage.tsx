@@ -185,6 +185,7 @@ function PlaybooksTab({ teamID, isCoach }: { teamID: string; isCoach: boolean })
   const navigate = useNavigate()
   const { playbooks, isLoading, fetchPlaybooks, createPlaybook, deletePlaybook } = usePlaybookStore()
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     void fetchPlaybooks(teamID)
@@ -192,7 +193,12 @@ function PlaybooksTab({ teamID, isCoach }: { teamID: string; isCoach: boolean })
 
   async function handleDelete(playbookID: string) {
     if (!window.confirm('Delete this playbook? All plays inside will be lost.')) return
-    await deletePlaybook(playbookID)
+    setDeleteError(null)
+    try {
+      await deletePlaybook(playbookID)
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : 'Failed to delete playbook.')
+    }
   }
 
   async function handleCreate(name: string, description: string) {
@@ -216,6 +222,12 @@ function PlaybooksTab({ teamID, isCoach }: { teamID: string; isCoach: boolean })
           <Button onClick={() => setShowCreateModal(true)}>New Playbook</Button>
         )}
       </div>
+
+      {deleteError && (
+        <p className="mb-3 rounded-md bg-red-900/30 px-3 py-2 text-sm text-red-300 border border-red-800">
+          {deleteError}
+        </p>
+      )}
 
       {playbooks.length === 0 ? (
         <div className="rounded-lg border border-secondary/10 bg-primary py-16 text-center">
@@ -253,10 +265,11 @@ function PlaybooksTab({ teamID, isCoach }: { teamID: string; isCoach: boolean })
 export default function TeamDetailPage() {
   const { teamID } = useParams<{ teamID: string }>()
   const navigate = useNavigate()
-  const { currentTeam, members, isLoading, fetchTeam, fetchMembers } = useTeamStore()
+  const { currentTeam, members, isTeamLoading, isMembersLoading, fetchTeam, fetchMembers } = useTeamStore()
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<Tab>('roster')
   const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!teamID) return
@@ -269,15 +282,17 @@ export default function TeamDetailPage() {
   async function handleDelete() {
     if (!teamID || !window.confirm('Delete this team? This cannot be undone.')) return
     setIsDeleting(true)
+    setDeleteError(null)
     try {
       await teamsApi.remove(teamID)
       navigate('/teams')
-    } catch {
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : 'Failed to delete team.')
       setIsDeleting(false)
     }
   }
 
-  if (isLoading || !currentTeam) {
+  if (isTeamLoading || !currentTeam) {
     return (
       <div className="flex justify-center py-24">
         <Spinner size="lg" />
@@ -307,6 +322,12 @@ export default function TeamDetailPage() {
         )}
       </div>
 
+      {deleteError && (
+        <p className="mt-3 rounded-md bg-red-900/30 px-3 py-2 text-sm text-red-300 border border-red-800">
+          {deleteError}
+        </p>
+      )}
+
       {/* Tabs */}
       <div className="mt-6 border-b border-secondary/20">
         <nav className="-mb-px flex gap-6">
@@ -330,13 +351,19 @@ export default function TeamDetailPage() {
       <div className="mt-6">
         {activeTab === 'roster' && (
           <div>
-            <div className="rounded-lg border border-secondary/20 bg-primary px-4">
-              {members.length === 0 ? (
-                <p className="py-8 text-center text-sm text-foreground/40">No members yet.</p>
-              ) : (
-                members.map((mwu) => <MemberRow key={mwu.member.id} mwu={mwu} />)
-              )}
-            </div>
+            {isMembersLoading ? (
+              <div className="flex justify-center py-12">
+                <Spinner size="lg" />
+              </div>
+            ) : (
+              <div className="rounded-lg border border-secondary/20 bg-primary px-4">
+                {members.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-foreground/40">No members yet.</p>
+                ) : (
+                  members.map((mwu) => <MemberRow key={mwu.member.id} mwu={mwu} />)
+                )}
+              </div>
+            )}
             {isCoach && teamID && <InviteForm teamID={teamID} />}
           </div>
         )}

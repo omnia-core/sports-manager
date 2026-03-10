@@ -2,15 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/omnia-core/sports-manager/backend/internal/domains"
 	"github.com/omnia-core/sports-manager/backend/internal/middleware"
-	"github.com/omnia-core/sports-manager/backend/internal/repository"
-	"github.com/omnia-core/sports-manager/backend/internal/usecase"
 )
 
 // InviteHandler handles invite HTTP endpoints.
@@ -56,7 +53,7 @@ func (h *InviteHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		Email:    body.Email,
 	})
 	if err != nil {
-		writeInviteUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
@@ -86,31 +83,9 @@ func (h *InviteHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		UserID: caller.ID,
 	})
 	if err != nil {
-		writeInviteUsecaseError(w, err)
+		writeUsecaseError(w, err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, res.Member)
-}
-
-// --- helpers -----------------------------------------------------------
-
-// writeInviteUsecaseError maps invite domain errors to appropriate HTTP status codes.
-func writeInviteUsecaseError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, usecase.ErrForbidden):
-		writeJSON(w, http.StatusForbidden, errBody("forbidden"))
-	case errors.Is(err, repository.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, errBody("not found"))
-	case errors.Is(err, usecase.ErrInviteAlreadyPending):
-		writeJSON(w, http.StatusConflict, errBody(err.Error()))
-	case errors.Is(err, usecase.ErrInviteInvalid):
-		writeJSON(w, http.StatusGone, errBody(err.Error()))
-	default:
-		if err.Error() == "email is required" {
-			writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
-			return
-		}
-		writeJSON(w, http.StatusInternalServerError, errBody("an error occurred"))
-	}
 }

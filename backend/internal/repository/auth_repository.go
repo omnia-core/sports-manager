@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/omnia-core/sports-manager/backend/internal/domains"
@@ -75,7 +74,3 @@ func hashToken(raw string) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-// RefreshTokenExpiresAt returns the expiry time for a new refresh token.
-func RefreshTokenExpiresAt() time.Time {
-	return time.Now().Add(30 * 24 * time.Hour)
-}
