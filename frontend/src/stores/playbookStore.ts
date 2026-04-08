@@ -10,6 +10,7 @@ interface PlaybookState {
   isLoading: boolean
   fetchPlaybooks(teamID: string): Promise<void>
   createPlaybook(teamID: string, data: { name: string; description?: string }): Promise<Playbook>
+  updatePlaybook(playbookID: string, data: { name: string; description?: string }): Promise<Playbook>
   deletePlaybook(playbookID: string): Promise<void>
   fetchPlays(playbookID: string): Promise<void>
   fetchPlay(playID: string): Promise<void>
@@ -39,6 +40,15 @@ export const usePlaybookStore = create<PlaybookState>((set) => ({
   async createPlaybook(teamID: string, data: { name: string; description?: string }) {
     const playbook = await playbooksApi.create(teamID, data)
     set((state) => ({ playbooks: [...state.playbooks, playbook] }))
+    return playbook
+  },
+
+  async updatePlaybook(playbookID: string, data: { name: string; description?: string }) {
+    const playbook = await playbooksApi.update(playbookID, data)
+    set((state) => ({
+      currentPlaybook: state.currentPlaybook?.id === playbookID ? playbook : state.currentPlaybook,
+      playbooks: state.playbooks.map((p) => (p.id === playbookID ? playbook : p)),
+    }))
     return playbook
   },
 

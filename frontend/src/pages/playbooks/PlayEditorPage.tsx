@@ -289,10 +289,12 @@ export default function PlayEditorPage() {
   // ── Add players ───────────────────────────────────────────────────────────
   function addPlayer(team: 'offense' | 'defense') {
     const existing = diagram.players.filter((p) => p.team === team)
-    const label = String(existing.length + 1)
+    // Use max existing label number + 1 so labels stay unique after deletions.
+    const maxLabel = existing.reduce((max, p) => Math.max(max, parseInt(p.label) || 0), 0)
+    const label = String(maxLabel + 1)
     const token: PlayerToken = {
       id: nextID(team === 'offense' ? 'o' : 'd'),
-      x: 100 + existing.length * 60,
+      x: 100 + (existing.length % 5) * 60,
       y: team === 'offense' ? 300 : 180,
       team,
       label,
@@ -322,6 +324,18 @@ export default function PlayEditorPage() {
     setDiagram((d) => ({
       ...d,
       annotations: d.annotations.map((a) => (a.id === id ? { ...a, x, y } : a)),
+    }))
+  }
+
+  // ── Annotation text edit ──────────────────────────────────────────────────
+  function handleAnnotationDblClick(id: string) {
+    const ann = diagram.annotations.find((a) => a.id === id)
+    if (!ann) return
+    const newText = window.prompt('Edit annotation text:', ann.text)
+    if (newText === null) return // cancelled
+    setDiagram((d) => ({
+      ...d,
+      annotations: d.annotations.map((a) => (a.id === id ? { ...a, text: newText.trim() || a.text } : a)),
     }))
   }
 
@@ -690,7 +704,12 @@ export default function PlayEditorPage() {
                       e.cancelBubble = true
                       setSelectedID(ann.id)
                     }}
+                    onDblClick={(e) => {
+                      e.cancelBubble = true
+                      if (canEdit) handleAnnotationDblClick(ann.id)
+                    }}
                     padding={4}
+                    title={canEdit ? 'Double-click to edit text' : undefined}
                   />
                 )
               })}
@@ -707,7 +726,7 @@ export default function PlayEditorPage() {
             {toolMode === 'arrow' ? `${arrowType} arrow` : toolMode}
           </span>
         </span>
-        {selectedID && <span>Selected: <span className="text-accent">{selectedID}</span></span>}
+        {canEdit && <span>Double-click annotation to edit text</span>}
         <span className="ml-auto">
           {diagram.players.length} players · {diagram.arrows.length} arrows · {diagram.annotations.length} annotations
         </span>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { authApi } from '../../api/auth'
 import { useAuthStore } from '../../stores/authStore'
 import { ApiError } from '../../api/client'
@@ -8,7 +8,10 @@ import Input from '../../components/ui/Input'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const setUser = useAuthStore((s) => s.setUser)
+
+  const inviteToken = searchParams.get('token')
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,7 +25,11 @@ export default function LoginPage() {
     try {
       const user = await authApi.login({ email, password })
       setUser(user)
-      navigate('/teams', { replace: true })
+      if (inviteToken) {
+        navigate(`/accept-invite?token=${inviteToken}`, { replace: true })
+      } else {
+        navigate('/teams', { replace: true })
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
     } finally {
@@ -34,9 +41,11 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm rounded-xl border border-secondary/20 bg-primary p-8 shadow-sm">
         <h1 className="mb-1 text-2xl font-bold text-foreground">Sign in</h1>
-        <p className="mb-6 text-sm text-foreground/50">Welcome back to Sports Manager</p>
+        <p className="mb-6 text-sm text-foreground/50">
+          {inviteToken ? "Sign in to accept your team invite" : "Welcome back to Sports Manager"}
+        </p>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4">
           <Input
             label="Email"
             type="email"
@@ -67,7 +76,10 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-foreground/50">
           Don't have an account?{' '}
-          <Link to="/register" className="font-medium text-secondary hover:text-accent">
+          <Link
+            to={inviteToken ? `/register?token=${inviteToken}` : '/register'}
+            className="font-medium text-secondary hover:text-accent"
+          >
             Create one
           </Link>
         </p>

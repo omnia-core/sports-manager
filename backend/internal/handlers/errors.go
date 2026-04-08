@@ -27,6 +27,8 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusGone, errBody(err.Error()))
 	case errors.Is(err, usecase.ErrAlreadyMember):
 		writeJSON(w, http.StatusConflict, errBody(err.Error()))
+	case errors.Is(err, usecase.ErrCannotRemoveCoach):
+		writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
 	case errors.Is(err, usecase.ErrNameRequired):
 		writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
 	case errors.Is(err, usecase.ErrInvalidCredentials):

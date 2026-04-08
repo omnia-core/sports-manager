@@ -158,7 +158,7 @@ export default function AcceptInvitePage() {
             <h1 className="mb-1 text-2xl font-bold text-foreground">Accept invite</h1>
             <p className="mb-6 text-sm text-foreground/50">
               Sign in to join the team. Don't have an account?{' '}
-              <Link to={`/register`} className="text-secondary hover:text-accent">
+              <Link to={`/register?token=${token}`} className="text-secondary hover:text-accent">
                 Create one
               </Link>
             </p>

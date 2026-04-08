@@ -205,6 +205,23 @@ func (r *teamRepository) DeleteTeam(ctx context.Context, req domains.DeleteTeamR
 	return domains.DeleteTeamResponse{}, nil
 }
 
+// RemoveMember deletes a team_members row for the given team+user pair.
+func (r *teamRepository) RemoveMember(ctx context.Context, req domains.RemoveMemberRequest) (domains.RemoveMemberResponse, error) {
+	const q = `DELETE FROM team_members WHERE team_id = $1 AND user_id = $2`
+	result, err := r.db.ExecContext(ctx, q, req.TeamID, req.UserID)
+	if err != nil {
+		return domains.RemoveMemberResponse{}, fmt.Errorf("remove member: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return domains.RemoveMemberResponse{}, fmt.Errorf("remove member rows affected: %w", err)
+	}
+	if n == 0 {
+		return domains.RemoveMemberResponse{}, ErrNotFound
+	}
+	return domains.RemoveMemberResponse{}, nil
+}
+
 // GetMembership returns a single team_members row for the given team+user pair,
 // or ErrNotFound if no membership exists.
 func (r *teamRepository) GetMembership(ctx context.Context, req domains.GetMembershipRequest) (domains.GetMembershipResponse, error) {

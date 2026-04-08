@@ -124,13 +124,71 @@ function CreatePlayModal({ onClose, onSubmit }: CreatePlayModalProps) {
   )
 }
 
+interface EditPlaybookModalProps {
+  initialName: string
+  initialDescription: string
+  onClose: () => void
+  onSubmit: (name: string, description: string) => Promise<unknown>
+}
+
+function EditPlaybookModal({ initialName, initialDescription, onClose, onSubmit }: EditPlaybookModalProps) {
+  const [name, setName] = useState(initialName)
+  const [description, setDescription] = useState(initialDescription)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return
+    setIsLoading(true)
+    setError('')
+    try {
+      await onSubmit(name.trim(), description.trim())
+      onClose()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update playbook.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <Modal title="Edit Playbook" onClose={onClose}>
+      <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4">
+        <Input
+          label="Playbook name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+        />
+        <Input
+          label="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Short description..."
+        />
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" isLoading={isLoading}>
+            Save
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 export default function PlaybookPage() {
   const { playbookID } = useParams<{ playbookID: string }>()
   const navigate = useNavigate()
-  const { currentPlaybook, plays, isLoading, fetchPlays, createPlay, deletePlay } = usePlaybookStore()
+  const { currentPlaybook, plays, isLoading, fetchPlays, createPlay, deletePlay, updatePlaybook } = usePlaybookStore()
   const { currentTeam, fetchTeam } = useTeamStore()
   const { user } = useAuthStore()
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   useEffect(() => {
     if (!playbookID) return
@@ -191,7 +249,12 @@ export default function PlaybookPage() {
           )}
         </div>
         {isCoach && (
-          <Button onClick={() => setShowCreateModal(true)}>New Play</Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setShowEditModal(true)}>
+              Edit
+            </Button>
+            <Button onClick={() => setShowCreateModal(true)}>New Play</Button>
+          </div>
         )}
       </div>
 
@@ -221,6 +284,17 @@ export default function PlaybookPage() {
         <CreatePlayModal
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreatePlay}
+        />
+      )}
+
+      {showEditModal && (
+        <EditPlaybookModal
+          initialName={currentPlaybook.name}
+          initialDescription={currentPlaybook.description ?? ''}
+          onClose={() => setShowEditModal(false)}
+          onSubmit={(name, description) =>
+            updatePlaybook(currentPlaybook.id, { name, description: description || undefined })
+          }
         />
       )}
     </div>

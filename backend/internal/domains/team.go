@@ -19,6 +19,7 @@ type TeamUsecase interface {
 	UpdateTeam(ctx context.Context, req UpdateTeamRequest) (UpdateTeamResponse, error)
 	DeleteTeam(ctx context.Context, req DeleteTeamRequest) (DeleteTeamResponse, error)
 	ListMembers(ctx context.Context, req ListMembersRequest) (ListMembersResponse, error)
+	RemoveMember(ctx context.Context, req RemoveMemberRequest) (RemoveMemberResponse, error)
 }
 
 // ----------------------------------------------------------------------------
@@ -34,6 +35,7 @@ type TeamRepository interface {
 	DeleteTeam(ctx context.Context, req DeleteTeamRequest) (DeleteTeamResponse, error)
 	GetMembership(ctx context.Context, req GetMembershipRequest) (GetMembershipResponse, error)
 	ListMembers(ctx context.Context, req ListMembersRequest) (ListMembersResponse, error)
+	RemoveMember(ctx context.Context, req RemoveMemberRequest) (RemoveMemberResponse, error)
 }
 
 // ----------------------------------------------------------------------------
@@ -123,3 +125,11 @@ type ListMembersRequest struct {
 type ListMembersResponse struct {
 	Members []MemberWithUser
 }
+
+type RemoveMemberRequest struct {
+	TeamID   uuid.UUID
+	UserID   uuid.UUID
+	CallerID uuid.UUID
+}
+
+type RemoveMemberResponse struct{}

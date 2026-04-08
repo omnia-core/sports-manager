@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { authApi } from '../../api/auth'
 import { useAuthStore } from '../../stores/authStore'
 import { ApiError } from '../../api/client'
@@ -8,7 +8,11 @@ import Input from '../../components/ui/Input'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const setUser = useAuthStore((s) => s.setUser)
+
+  // If there's an invite token in the URL, redirect back to accept it after registration.
+  const inviteToken = searchParams.get('token')
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -23,7 +27,11 @@ export default function RegisterPage() {
     try {
       const user = await authApi.register({ name, email, password })
       setUser(user)
-      navigate('/teams', { replace: true })
+      if (inviteToken) {
+        navigate(`/accept-invite?token=${inviteToken}`, { replace: true })
+      } else {
+        navigate('/teams', { replace: true })
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
     } finally {
@@ -35,9 +43,11 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm rounded-xl border border-secondary/20 bg-primary p-8 shadow-sm">
         <h1 className="mb-1 text-2xl font-bold text-foreground">Create account</h1>
-        <p className="mb-6 text-sm text-foreground/50">Start managing your team today</p>
+        <p className="mb-6 text-sm text-foreground/50">
+          {inviteToken ? "Create an account to accept your team invite" : "Start managing your team today"}
+        </p>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4">
           <Input
             label="Name"
             type="text"
@@ -78,7 +88,10 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-center text-sm text-foreground/50">
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-secondary hover:text-accent">
+          <Link
+            to={inviteToken ? `/login?token=${inviteToken}` : '/login'}
+            className="font-medium text-secondary hover:text-accent"
+          >
             Sign in
           </Link>
         </p>
