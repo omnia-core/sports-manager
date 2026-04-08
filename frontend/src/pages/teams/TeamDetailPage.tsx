@@ -18,22 +18,51 @@ function RoleBadge({ role }: { role: 'coach' | 'player' }) {
   return <Badge variant={role === 'coach' ? 'blue' : 'gray'}>{role === 'coach' ? 'Coach' : 'Player'}</Badge>
 }
 
-function MemberRow({ mwu }: { mwu: MemberWithUser }) {
+function MemberRow({
+  mwu,
+  isCoach,
+  isCurrentUser,
+  onRemove,
+}: {
+  mwu: MemberWithUser
+  isCoach: boolean
+  isCurrentUser: boolean
+  onRemove: () => void
+}) {
   const { member, user } = mwu
+  const canRemove = isCoach && member.role !== 'coach'
+
   return (
     <div className="flex items-center gap-4 border-b border-secondary/10 py-3 last:border-0">
       <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-secondary/20 text-sm font-semibold text-accent">
         {user.name.charAt(0).toUpperCase()}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{user.name}</p>
+        <p className="truncate text-sm font-medium text-foreground">
+          {user.name}
+          {isCurrentUser && <span className="ml-1 text-xs text-foreground/30">(you)</span>}
+        </p>
         <p className="truncate text-xs text-foreground/40">{user.email}</p>
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">
         {member.jersey_number !== null && (
           <span className="text-xs text-foreground/40">#{member.jersey_number}</span>
         )}
+        {member.position && (
+          <span className="text-xs text-foreground/40">{member.position}</span>
+        )}
         <RoleBadge role={member.role} />
+        {canRemove && (
+          <button
+            onClick={onRemove}
+            className="rounded p-1 text-foreground/30 hover:bg-red-900/30 hover:text-red-400"
+            aria-label={`Remove ${user.name}`}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   )
@@ -47,7 +76,7 @@ function InviteForm({ teamID }: { teamID: string }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!email.trim()) return
+    if (!email.trim() || status === 'loading') return
     setStatus('loading')
     setMessage('')
     try {
@@ -72,6 +101,7 @@ function InviteForm({ teamID }: { teamID: string }) {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="player@example.com"
           className="flex-1"
+          disabled={status === 'loading'}
         />
         <Button type="submit" isLoading={status === 'loading'} className="self-end">
           Send Invite
@@ -80,6 +110,59 @@ function InviteForm({ teamID }: { teamID: string }) {
       {status === 'success' && <p className="text-sm text-accent">{message}</p>}
       {status === 'error' && <p className="text-sm text-red-400">{message}</p>}
     </form>
+  )
+}
+
+// ─── Edit Team Modal ──────────────────────────────────────────────────────────
+
+function EditTeamModal({
+  initialName,
+  onClose,
+  onSubmit,
+}: {
+  initialName: string
+  onClose: () => void
+  onSubmit: (name: string) => Promise<unknown>
+}) {
+  const [name, setName] = useState(initialName)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return
+    setIsLoading(true)
+    setError('')
+    try {
+      await onSubmit(name.trim())
+      onClose()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update team.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <Modal title="Edit Team" onClose={onClose}>
+      <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4">
+        <Input
+          label="Team name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+        />
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" isLoading={isLoading}>
+            Save
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
@@ -265,11 +348,13 @@ function PlaybooksTab({ teamID, isCoach }: { teamID: string; isCoach: boolean })
 export default function TeamDetailPage() {
   const { teamID } = useParams<{ teamID: string }>()
   const navigate = useNavigate()
-  const { currentTeam, members, isTeamLoading, isMembersLoading, fetchTeam, fetchMembers } = useTeamStore()
+  const { currentTeam, members, isTeamLoading, isMembersLoading, fetchTeam, fetchMembers, updateTeam, removeMember } = useTeamStore()
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<Tab>('roster')
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [removeError, setRemoveError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!teamID) return
@@ -289,6 +374,16 @@ export default function TeamDetailPage() {
     } catch (err) {
       setDeleteError(err instanceof ApiError ? err.message : 'Failed to delete team.')
       setIsDeleting(false)
+    }
+  }
+
+  async function handleRemoveMember(userID: string, userName: string) {
+    if (!teamID || !window.confirm(`Remove ${userName} from this team?`)) return
+    setRemoveError(null)
+    try {
+      await removeMember(teamID, userID)
+    } catch (err) {
+      setRemoveError(err instanceof ApiError ? err.message : 'Failed to remove member.')
     }
   }
 
@@ -316,9 +411,14 @@ export default function TeamDetailPage() {
           <Badge variant="blue">{currentTeam.sport}</Badge>
         </div>
         {isCoach && (
-          <Button variant="danger" isLoading={isDeleting} onClick={() => void handleDelete()}>
-            Delete Team
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setShowEditModal(true)}>
+              Edit
+            </Button>
+            <Button variant="danger" isLoading={isDeleting} onClick={() => void handleDelete()}>
+              Delete Team
+            </Button>
+          </div>
         )}
       </div>
 
@@ -356,13 +456,31 @@ export default function TeamDetailPage() {
                 <Spinner size="lg" />
               </div>
             ) : (
-              <div className="rounded-lg border border-secondary/20 bg-primary px-4">
-                {members.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-foreground/40">No members yet.</p>
-                ) : (
-                  members.map((mwu) => <MemberRow key={mwu.member.id} mwu={mwu} />)
+              <>
+                {removeError && (
+                  <p className="mb-3 rounded-md bg-red-900/30 px-3 py-2 text-sm text-red-300 border border-red-800">
+                    {removeError}
+                  </p>
                 )}
-              </div>
+                <div className="rounded-lg border border-secondary/20 bg-primary px-4">
+                  {members.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-foreground/40">
+                      No members yet.
+                      {isCoach && <span className="block mt-1 text-xs text-foreground/30">Use "Invite a player" below to add members.</span>}
+                    </p>
+                  ) : (
+                    members.map((mwu) => (
+                      <MemberRow
+                        key={mwu.member.id}
+                        mwu={mwu}
+                        isCoach={isCoach}
+                        isCurrentUser={mwu.user.id === user?.id}
+                        onRemove={() => void handleRemoveMember(mwu.user.id, mwu.user.name)}
+                      />
+                    ))
+                  )}
+                </div>
+              </>
             )}
             {isCoach && teamID && <InviteForm teamID={teamID} />}
           </div>
@@ -371,6 +489,14 @@ export default function TeamDetailPage() {
           <PlaybooksTab teamID={teamID} isCoach={isCoach} />
         )}
       </div>
+
+      {showEditModal && (
+        <EditTeamModal
+          initialName={currentTeam.name}
+          onClose={() => setShowEditModal(false)}
+          onSubmit={(name) => updateTeam(currentTeam.id, { name })}
+        />
+      )}
     </div>
   )
 }

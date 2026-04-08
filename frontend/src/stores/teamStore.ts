@@ -12,8 +12,10 @@ interface TeamState {
   fetchTeams(): Promise<void>
   fetchTeam(teamID: string): Promise<void>
   createTeam(data: { name: string; sport: string }): Promise<Team>
+  updateTeam(teamID: string, data: { name: string }): Promise<Team>
   fetchMembers(teamID: string): Promise<void>
   inviteMember(teamID: string, email: string): Promise<void>
+  removeMember(teamID: string, userID: string): Promise<void>
 }
 
 export const useTeamStore = create<TeamState>((set) => ({
@@ -50,6 +52,15 @@ export const useTeamStore = create<TeamState>((set) => ({
     return team
   },
 
+  async updateTeam(teamID: string, data: { name: string }) {
+    const team = await teamsApi.update(teamID, data)
+    set((state) => ({
+      currentTeam: state.currentTeam?.id === teamID ? team : state.currentTeam,
+      teams: state.teams.map((t) => (t.id === teamID ? team : t)),
+    }))
+    return team
+  },
+
   async fetchMembers(teamID: string) {
     set({ isMembersLoading: true })
     try {
@@ -62,5 +73,12 @@ export const useTeamStore = create<TeamState>((set) => ({
 
   async inviteMember(teamID: string, email: string) {
     await teamsApi.inviteMember(teamID, email)
+  },
+
+  async removeMember(teamID: string, userID: string) {
+    await teamsApi.removeMember(teamID, userID)
+    set((state) => ({
+      members: state.members.filter((m) => m.user.id !== userID),
+    }))
   },
 }))

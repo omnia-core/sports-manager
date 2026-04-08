@@ -209,6 +209,41 @@ func (h *TeamHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"members": members})
 }
 
+// --- RemoveMember ------------------------------------------------------
+
+// RemoveMember handles DELETE /api/teams/:teamID/members/:userID.
+func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	caller, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, errBody("not authenticated"))
+		return
+	}
+
+	teamID, err := parseUUIDParam(r, "teamID")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid team ID"))
+		return
+	}
+
+	userID, err := parseUUIDParam(r, "userID")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid user ID"))
+		return
+	}
+
+	_, err = h.usecase.RemoveMember(r.Context(), domains.RemoveMemberRequest{
+		TeamID:   teamID,
+		UserID:   userID,
+		CallerID: caller.ID,
+	})
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- helpers -----------------------------------------------------------
 
 // parseUUIDParam extracts and parses a named chi URL parameter as a UUID.

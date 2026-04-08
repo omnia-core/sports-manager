@@ -104,6 +104,7 @@ func main() {
 		r.Delete("/{teamID}", teamHandler.DeleteTeam)
 		r.Get("/{teamID}/members", teamHandler.ListMembers)
 		r.Post("/{teamID}/members", inviteHandler.CreateInvite)
+		r.Delete("/{teamID}/members/{userID}", teamHandler.RemoveMember)
 		r.Get("/{teamID}/playbooks", playbookHandler.ListPlaybooks)
 		r.Post("/{teamID}/playbooks", playbookHandler.CreatePlaybook)
 	})

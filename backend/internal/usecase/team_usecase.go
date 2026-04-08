@@ -19,6 +19,9 @@ var ErrNameRequired = errors.New("name is required")
 // ErrAlreadyMember is returned when the user is already a member of the team.
 var ErrAlreadyMember = errors.New("user is already a member of this team")
 
+// ErrCannotRemoveCoach is returned when attempting to remove the team coach.
+var ErrCannotRemoveCoach = errors.New("cannot remove the team coach")
+
 // teamUsecase is the concrete implementation of domains.TeamUsecase.
 type teamUsecase struct {
 	repo domains.TeamRepository
@@ -113,6 +116,29 @@ func (u *teamUsecase) ListMembers(ctx context.Context, req domains.ListMembersRe
 	res, err := u.repo.ListMembers(ctx, req)
 	if err != nil {
 		return domains.ListMembersResponse{}, fmt.Errorf("list members: %w", err)
+	}
+	return res, nil
+}
+
+// RemoveMember verifies the caller is a coach, prevents removing the coach,
+// then removes the target user from the team.
+func (u *teamUsecase) RemoveMember(ctx context.Context, req domains.RemoveMemberRequest) (domains.RemoveMemberResponse, error) {
+	if err := requireCoach(ctx, u.repo, req.TeamID, req.CallerID); err != nil {
+		return domains.RemoveMemberResponse{}, err
+	}
+
+	// Prevent removing the coach from their own team.
+	teamRes, err := u.repo.GetTeam(ctx, domains.GetTeamRequest{TeamID: req.TeamID, CallerID: req.CallerID})
+	if err != nil {
+		return domains.RemoveMemberResponse{}, fmt.Errorf("get team: %w", err)
+	}
+	if teamRes.Team.CoachID == req.UserID {
+		return domains.RemoveMemberResponse{}, ErrCannotRemoveCoach
+	}
+
+	res, err := u.repo.RemoveMember(ctx, req)
+	if err != nil {
+		return domains.RemoveMemberResponse{}, fmt.Errorf("remove member: %w", err)
 	}
 	return res, nil
 }
