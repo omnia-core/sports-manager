@@ -28,6 +28,9 @@ Thumbs.db
 .claude/
 CLAUDE.md
 
+# Private project docs
+TODO.md
+
 # Misc
 *.pem
 npm-debug.log*

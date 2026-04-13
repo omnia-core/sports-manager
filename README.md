@@ -23,14 +23,28 @@ A sports team management PWA for coaches and players. Coaches create and manage 
 
 ## Getting Started
 
-### Prerequisites
+### Docker (recommended)
+
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+```bash
+docker compose up --build
+```
+
+Opens at **http://localhost:3000**. Data persists across restarts — only `docker compose down -v` wipes the database.
+
+---
+
+### Local Development
+
+#### Prerequisites
 
 - Go 1.22+
 - Node.js 20+
 - PostgreSQL 15+
 - [`golang-migrate`](https://github.com/golang-migrate/migrate) CLI
 
-### Backend
+#### Backend
 
 ```bash
 cd backend
@@ -59,7 +73,7 @@ go run cmd/server/main.go
 | `APP_URL` | Frontend base URL (default: http://localhost:5173) |
 | `ALLOWED_ORIGIN` | CORS allowed origin (default: http://localhost:5173) |
 
-### Frontend
+#### Frontend
 
 ```bash
 cd frontend
