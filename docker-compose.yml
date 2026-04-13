@@ -5,10 +5,48 @@ services:
       POSTGRES_DB: sports_manager
       POSTGRES_USER: sports_manager
       POSTGRES_PASSWORD: sports_manager
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sports_manager"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: migrate/migrate:latest
+    command:
+      - "-path=/migrations"
+      - "-database"
+      - "postgres://sports_manager:sports_manager@db:5432/sports_manager?sslmode=disable"
+      - "up"
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build: ./backend
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgres://sports_manager:sports_manager@db:5432/sports_manager?sslmode=disable
+      JWT_SECRET: local-dev-secret-change-in-prod
+      ALLOWED_ORIGIN: http://localhost:3000
+      APP_URL: http://localhost:3000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ""
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

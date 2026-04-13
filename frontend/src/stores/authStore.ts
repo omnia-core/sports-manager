@@ -35,7 +35,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     // importing the store directly (avoids circular dependency).
     registerUnauthorizedHandler(() => {
       set({ user: null, isAuthenticated: false })
-      window.location.href = '/login'
+      const pub = ['/login', '/register', '/accept-invite']
+      if (!pub.some((p) => window.location.pathname.startsWith(p))) {
+        window.location.href = '/login'
+      }
     })
 
     set({ isLoading: true })
