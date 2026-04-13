@@ -67,6 +67,14 @@ Build order follows dependency chain — backend auth must exist before frontend
 - [x] Service worker (via `vite-plugin-pwa`)
 - [x] Offline support (read-only cached data)
 
+## Phase 10 — Local Deployment ✓
+- [x] `backend/Dockerfile` (multi-stage Go build)
+- [x] `frontend/Dockerfile` (Node build → nginx)
+- [x] `frontend/nginx.conf` (proxy `/api/*` to backend, SPA fallback)
+- [x] `docker-compose.yml` — full stack: db + migrate + backend + frontend
+- [x] Fix auth redirect loop on unauthenticated first load
+- [x] Disable service worker in Docker builds (`VITE_DISABLE_SW`) to avoid stale cache
+
 ## Future (Post-MVP)
 - [ ] Google OAuth (backend + frontend)
 - [ ] Player stats tracking (basketball: points, assists, rebounds, etc.)
