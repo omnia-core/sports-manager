@@ -7,6 +7,7 @@ import { useTeamStore } from '../../stores/teamStore'
 import { useAuthStore } from '../../stores/authStore'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
+import Modal from '../../components/ui/Modal'
 import type { DiagramJSON, PlayerToken, Arrow as ArrowType, Annotation } from '../../types'
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
@@ -22,6 +23,7 @@ const COLOR_SELECTED = '#FACC15'
 // ─── Court dimensions (canvas coords) ───────────────────────────────────────
 const CANVAS_W = 800
 const CANVAS_H = 500
+const CANVAS_H_FULL = 960
 const PLAYER_RADIUS = 16
 
 // Halfcourt: court fills the canvas
@@ -74,18 +76,7 @@ function HalfCourt() {
         fill="transparent"
       />
 
-      {/* Free-throw circle (top half only — dashed bottom half) */}
-      <Arc
-        x={basketX}
-        y={ftCY}
-        innerRadius={HC.ftRadius}
-        outerRadius={HC.ftRadius}
-        angle={180}
-        rotation={0}
-        stroke={COLOR_COURT}
-        strokeWidth={1.5}
-        fill="transparent"
-      />
+      {/* Free-throw circle: solid half faces midcourt (upward), dashed half faces basket (downward) */}
       <Arc
         x={basketX}
         y={ftCY}
@@ -95,18 +86,29 @@ function HalfCourt() {
         rotation={180}
         stroke={COLOR_COURT}
         strokeWidth={1.5}
+        fill="transparent"
+      />
+      <Arc
+        x={basketX}
+        y={ftCY}
+        innerRadius={HC.ftRadius}
+        outerRadius={HC.ftRadius}
+        angle={180}
+        rotation={0}
+        stroke={COLOR_COURT}
+        strokeWidth={1.5}
         dash={[6, 4]}
         fill="transparent"
       />
 
-      {/* Three-point arc */}
+      {/* Three-point arc: rotation=180 → sweeps left→up→right, opening toward midcourt */}
       <Arc
         x={basketX}
         y={basketY}
         innerRadius={HC.threeRadius}
         outerRadius={HC.threeRadius}
-        angle={166}
-        rotation={-83}
+        angle={180}
+        rotation={180}
         stroke={COLOR_COURT}
         strokeWidth={1.5}
         fill="transparent"
@@ -114,12 +116,12 @@ function HalfCourt() {
 
       {/* Three-point corner lines */}
       <Line
-        points={[basketX - HC.threeRadius - 4, basketY, basketX - HC.threeRadius - 4, HC.y + HC.h]}
+        points={[basketX - HC.threeRadius, basketY, basketX - HC.threeRadius, HC.y + HC.h]}
         stroke={COLOR_COURT}
         strokeWidth={1.5}
       />
       <Line
-        points={[basketX + HC.threeRadius + 4, basketY, basketX + HC.threeRadius + 4, HC.y + HC.h]}
+        points={[basketX + HC.threeRadius, basketY, basketX + HC.threeRadius, HC.y + HC.h]}
         stroke={COLOR_COURT}
         strokeWidth={1.5}
       />
@@ -148,68 +150,58 @@ function HalfCourt() {
 }
 
 function FullCourt() {
-  // Full court: two half courts mirrored top/bottom
-  const midY = CANVAS_H / 2
-  const bTopX = HC.basketX
-  const bTopY = HC.y + 40
-  const bBotX = HC.basketX
-  const bBotY = CANVAS_H - HC.y - 40
+  const courtH = CANVAS_H_FULL - 40  // 920
+  const midY = CANVAS_H_FULL / 2     // 480
+  const bX = HC.basketX              // 400
+  const r3 = HC.threeRadius          // 160
+  const rFt = HC.ftRadius            // 60
+  const keyW = HC.keyW               // 160
+  const keyH = HC.keyH               // 190
 
-  const keyW = HC.keyW
-  const keyH = HC.keyH
+  // Top basket at y=60 — attacks downward into court
+  const bTopY = HC.y + 40            // 60
+  const topFtCY = bTopY + keyH       // 250
 
-  // Top basket (pointing down)
-  const topKeyLeft = bTopX - keyW / 2
-  const topKeyTop = bTopY
-  const topFtCY = bTopY + keyH
-
-  // Bottom basket (pointing up)
-  const botKeyLeft = bBotX - keyW / 2
-  const botKeyTop = bBotY - keyH
-  const botFtCY = botKeyTop
+  // Bottom basket at y=900 — attacks upward into court (mirrors halfcourt)
+  const bBotY = CANVAS_H_FULL - HC.y - 40  // 900
+  const botFtCY = bBotY - keyH       // 710
 
   return (
     <>
       {/* Court rectangle */}
-      <Rect
-        x={HC.x}
-        y={HC.y}
-        width={HC.w}
-        height={HC.h}
-        stroke={COLOR_COURT}
-        strokeWidth={2}
-        fill={COLOR_BG}
-      />
+      <Rect x={HC.x} y={HC.y} width={HC.w} height={courtH} stroke={COLOR_COURT} strokeWidth={2} fill={COLOR_BG} />
 
-      {/* Half-court line */}
-      <Line
-        points={[HC.x, midY, HC.x + HC.w, midY]}
-        stroke={COLOR_COURT}
-        strokeWidth={1.5}
-      />
+      {/* Half-court line + center circle */}
+      <Line points={[HC.x, midY, HC.x + HC.w, midY]} stroke={COLOR_COURT} strokeWidth={1.5} />
+      <Circle x={bX} y={midY} radius={50} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
 
-      {/* Center circle */}
-      <Circle x={HC.basketX} y={midY} radius={50} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      {/* ── TOP BASKET (attacks downward) ── */}
+      <Rect x={bX - keyW / 2} y={bTopY} width={keyW} height={keyH} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      {/* FT circle: solid faces midcourt (downward=90°), dashed faces basket (upward=270°) */}
+      <Arc x={bX} y={topFtCY} innerRadius={rFt} outerRadius={rFt} angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      <Arc x={bX} y={topFtCY} innerRadius={rFt} outerRadius={rFt} angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} dash={[6, 4]} fill="transparent" />
+      {/* Three-point arc: rotation=0 → right→down→left, opening downward into court */}
+      <Arc x={bX} y={bTopY} innerRadius={r3} outerRadius={r3} angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      {/* Corner lines go up to top baseline */}
+      <Line points={[bX - r3, bTopY, bX - r3, HC.y]} stroke={COLOR_COURT} strokeWidth={1.5} />
+      <Line points={[bX + r3, bTopY, bX + r3, HC.y]} stroke={COLOR_COURT} strokeWidth={1.5} />
+      {/* Backboard above basket (between basket and baseline) */}
+      <Line points={[bX - 24, bTopY - 10, bX + 24, bTopY - 10]} stroke={COLOR_COURT} strokeWidth={3} />
+      <Circle x={bX} y={bTopY} radius={10} stroke={COLOR_COURT} strokeWidth={2} fill="transparent" />
 
-      {/* Top key */}
-      <Rect x={topKeyLeft} y={topKeyTop} width={keyW} height={keyH} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      <Arc x={bTopX} y={topFtCY} innerRadius={HC.ftRadius} outerRadius={HC.ftRadius} angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      <Arc x={bTopX} y={topFtCY} innerRadius={HC.ftRadius} outerRadius={HC.ftRadius} angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} dash={[6, 4]} fill="transparent" />
-      <Arc x={bTopX} y={bTopY} innerRadius={HC.threeRadius} outerRadius={HC.threeRadius} angle={166} rotation={97} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      <Line points={[bTopX - HC.threeRadius - 4, bTopY, bTopX - HC.threeRadius - 4, HC.y]} stroke={COLOR_COURT} strokeWidth={1.5} />
-      <Line points={[bTopX + HC.threeRadius + 4, bTopY, bTopX + HC.threeRadius + 4, HC.y]} stroke={COLOR_COURT} strokeWidth={1.5} />
-      <Line points={[bTopX - 24, bTopY - 10, bTopX + 24, bTopY - 10]} stroke={COLOR_COURT} strokeWidth={3} />
-      <Circle x={bTopX} y={bTopY} radius={10} stroke={COLOR_COURT} strokeWidth={2} fill="transparent" />
-
-      {/* Bottom key */}
-      <Rect x={botKeyLeft} y={botKeyTop} width={keyW} height={keyH} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      <Arc x={bBotX} y={botFtCY} innerRadius={HC.ftRadius} outerRadius={HC.ftRadius} angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      <Arc x={bBotX} y={botFtCY} innerRadius={HC.ftRadius} outerRadius={HC.ftRadius} angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} dash={[6, 4]} fill="transparent" />
-      <Arc x={bBotX} y={bBotY} innerRadius={HC.threeRadius} outerRadius={HC.threeRadius} angle={166} rotation={-83} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      <Line points={[bBotX - HC.threeRadius - 4, bBotY, bBotX - HC.threeRadius - 4, HC.y + HC.h]} stroke={COLOR_COURT} strokeWidth={1.5} />
-      <Line points={[bBotX + HC.threeRadius + 4, bBotY, bBotX + HC.threeRadius + 4, HC.y + HC.h]} stroke={COLOR_COURT} strokeWidth={1.5} />
-      <Line points={[bBotX - 24, bBotY + 10, bBotX + 24, bBotY + 10]} stroke={COLOR_COURT} strokeWidth={3} />
-      <Circle x={bBotX} y={bBotY} radius={10} stroke={COLOR_COURT} strokeWidth={2} fill="transparent" />
+      {/* ── BOTTOM BASKET (attacks upward — mirrors halfcourt) ── */}
+      <Rect x={bX - keyW / 2} y={botFtCY} width={keyW} height={keyH} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      {/* FT circle: solid faces midcourt (upward=270°), dashed faces basket (downward=90°) */}
+      <Arc x={bX} y={botFtCY} innerRadius={rFt} outerRadius={rFt} angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      <Arc x={bX} y={botFtCY} innerRadius={rFt} outerRadius={rFt} angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} dash={[6, 4]} fill="transparent" />
+      {/* Three-point arc: rotation=180 → left→up→right, opening upward into court */}
+      <Arc x={bX} y={bBotY} innerRadius={r3} outerRadius={r3} angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      {/* Corner lines go down to bottom baseline */}
+      <Line points={[bX - r3, bBotY, bX - r3, HC.y + courtH]} stroke={COLOR_COURT} strokeWidth={1.5} />
+      <Line points={[bX + r3, bBotY, bX + r3, HC.y + courtH]} stroke={COLOR_COURT} strokeWidth={1.5} />
+      {/* Backboard below basket */}
+      <Line points={[bX - 24, bBotY + 10, bX + 24, bBotY + 10]} stroke={COLOR_COURT} strokeWidth={3} />
+      <Circle x={bX} y={bBotY} radius={10} stroke={COLOR_COURT} strokeWidth={2} fill="transparent" />
     </>
   )
 }
@@ -250,6 +242,7 @@ export default function PlayEditorPage() {
   const [arrowStep, setArrowStep] = useState<ArrowStep>({ step: 'idle' })
   const [isSaving, setIsSaving] = useState(false)
   const [arrowType, setArrowType] = useState<ArrowType['type']>('run')
+  const [annotationEdit, setAnnotationEdit] = useState<{ id: string; text: string } | null>(null)
 
   const stageRef = useRef<Konva.Stage>(null)
 
@@ -331,12 +324,19 @@ export default function PlayEditorPage() {
   function handleAnnotationDblClick(id: string) {
     const ann = diagram.annotations.find((a) => a.id === id)
     if (!ann) return
-    const newText = window.prompt('Edit annotation text:', ann.text)
-    if (newText === null) return // cancelled
-    setDiagram((d) => ({
-      ...d,
-      annotations: d.annotations.map((a) => (a.id === id ? { ...a, text: newText.trim() || a.text } : a)),
-    }))
+    setAnnotationEdit({ id, text: ann.text })
+  }
+
+  function saveAnnotationEdit() {
+    if (!annotationEdit) return
+    const trimmed = annotationEdit.text.trim()
+    if (trimmed) {
+      setDiagram((d) => ({
+        ...d,
+        annotations: d.annotations.map((a) => (a.id === annotationEdit.id ? { ...a, text: trimmed } : a)),
+      }))
+    }
+    setAnnotationEdit(null)
   }
 
   // ── Delete selected ───────────────────────────────────────────────────────
@@ -457,6 +457,7 @@ export default function PlayEditorPage() {
   }
 
   const canEdit = isCoach
+  const canvasH = diagram.background === 'fullcourt' ? CANVAS_H_FULL : CANVAS_H
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -603,13 +604,13 @@ export default function PlayEditorPage() {
           <Stage
             ref={stageRef}
             width={CANVAS_W}
-            height={CANVAS_H}
+            height={canvasH}
             onClick={handleStageClick}
             style={{ cursor: toolMode !== 'select' ? 'crosshair' : 'default' }}
           >
             <Layer>
               {/* Court background */}
-              <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill={COLOR_BG} listening={true} attrs={{ 'data-court': true }} />
+              <Rect x={0} y={0} width={CANVAS_W} height={canvasH} fill={COLOR_BG} listening={true} attrs={{ 'data-court': true }} />
               {diagram.background === 'halfcourt' ? <HalfCourt /> : <FullCourt />}
 
               {/* Arrows */}
@@ -717,6 +718,28 @@ export default function PlayEditorPage() {
           </Stage>
         </div>
       </div>
+
+      {/* Annotation edit modal */}
+      {annotationEdit && (
+        <Modal title="Edit annotation" onClose={() => setAnnotationEdit(null)}>
+          <div className="flex flex-col gap-4">
+            <textarea
+              autoFocus
+              className="w-full rounded-md border border-secondary/30 bg-background px-3 py-2 text-sm text-foreground placeholder-foreground/30 focus:border-secondary focus:outline-none resize-none"
+              rows={3}
+              value={annotationEdit.text}
+              onChange={(e) => setAnnotationEdit({ ...annotationEdit, text: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveAnnotationEdit() }
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setAnnotationEdit(null)}>Cancel</Button>
+              <Button onClick={saveAnnotationEdit}>Save</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Status bar */}
       <div className="flex items-center gap-3 text-xs text-foreground/30">
