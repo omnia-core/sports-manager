@@ -8,6 +8,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      disable: process.env.VITE_DISABLE_SW === 'true',
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png', 'icons/*.svg', 'icons/*.ico'],
       manifest: {
