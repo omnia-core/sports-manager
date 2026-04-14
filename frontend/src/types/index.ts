@@ -81,3 +81,46 @@ export interface Annotation {
   y: number
   text: string
 }
+
+export interface Game {
+  id: string
+  team_id: string
+  opponent_name: string
+  game_date: string  // "YYYY-MM-DD"
+  team_score: number | null
+  opponent_score: number | null
+  created_at: string
+}
+
+export interface GameStats {
+  mins: number
+  pts: number
+  fgm: number
+  fga: number
+  three_pm: number
+  three_pa: number
+  ftm: number
+  fta: number
+  orb: number
+  drb: number
+  ast: number
+  stl: number
+  blk: number
+  tov: number
+  pf: number
+  plus_minus: number
+}
+
+export interface GamePlayer {
+  user_id: string
+  name: string
+  jersey_number: number | null
+  position: string | null
+  is_dnp: boolean
+  stats: GameStats | null
+}
+
+export interface GameDetail {
+  game: Game
+  players: GamePlayer[]
+}
