@@ -20,188 +20,158 @@ const COLOR_ACCENT = '#6EE7B7'
 const COLOR_WHITE = '#F8FAFC'
 const COLOR_SELECTED = '#FACC15'
 
-// ─── Court dimensions (canvas coords) ───────────────────────────────────────
+// ─── Court dimensions (FIBA-proportionate: 15m × 28m) ───────────────────────
 const CANVAS_W = 800
-const CANVAS_H = 500
-const CANVAS_H_FULL = 960
+const SCALE = 760 / 15                                        // px per metre — 760px usable width = 15m
+const COURT_H_HALF = Math.round(14 * SCALE)                  // half-court depth ≈ 709px
+const COURT_H_FULL = Math.round(28 * SCALE)                  // full-court depth ≈ 1419px
+const CANVAS_H = COURT_H_HALF + 40                           // canvas height (half) = 749px
+const CANVAS_H_FULL = COURT_H_FULL + 40                      // canvas height (full) = 1459px
 const PLAYER_RADIUS = 16
+const COURT_X = 20
+const COURT_Y = 20
+const COURT_W = CANVAS_W - 40                                 // 760px
 
-// Halfcourt: court fills the canvas
-const HC = {
-  x: 20,
-  y: 20,
-  w: CANVAS_W - 40,
-  h: CANVAS_H - 40,
-  // basket position (bottom-center)
-  basketX: CANVAS_W / 2,
-  basketY: CANVAS_H - 20 - 40,
-  // three-point arc: NBA ~23.75ft; scale proportionally
-  threeRadius: 160,
-  // key/paint
-  keyW: 160,
-  keyH: 190,
-  // free-throw circle
-  ftRadius: 60,
-}
+// FIBA measurements → pixels
+const BASKET_DEPTH    = Math.round(1.575 * SCALE)            // basket centre from endline ≈ 80px
+const FT_DEPTH        = Math.round(5.8 * SCALE)              // FT line from endline ≈ 294px
+const KEY_W           = Math.round(4.9 * SCALE)              // paint width ≈ 248px
+const FT_RADIUS       = Math.round(1.8 * SCALE)              // FT / centre-circle radius ≈ 91px
+const THREE_RADIUS    = Math.round(6.75 * SCALE)             // 3-pt arc radius ≈ 342px
+const THREE_CX        = Math.round(6.60 * SCALE)             // corner x offset from basket ≈ 334px
+const THREE_CY        = Math.round(Math.sqrt(6.75 ** 2 - 6.60 ** 2) * SCALE) // corner y offset ≈ 72px
+const THREE_ARC_HALF  = Math.atan2(Math.sqrt(6.75 ** 2 - 6.60 ** 2), 6.60) * (180 / Math.PI) // ≈ 12.1°
+const THREE_ARC_ANGLE = 180 - 2 * THREE_ARC_HALF            // ≈ 155.8°
+const BACKBOARD_HALF  = Math.round(0.915 * SCALE)            // half of 1.83m backboard ≈ 46px
+const BACKBOARD_OFFSET = Math.round(0.375 * SCALE)           // basket-to-backboard gap ≈ 19px
+const HOOP_RADIUS     = Math.round(0.225 * SCALE)            // ring radius ≈ 11px
 
 // ─── Court drawing ───────────────────────────────────────────────────────────
 function HalfCourt() {
-  const basketX = HC.basketX
-  const basketY = HC.basketY
-  const keyLeft = basketX - HC.keyW / 2
-  const keyTop = basketY - HC.keyH
-  const ftCY = keyTop
+  const cx       = COURT_X + COURT_W / 2                     // horizontal centre = 400
+  const endlineY = COURT_Y + COURT_H_HALF                    // bottom endline = 729
+  const basketY  = endlineY - BASKET_DEPTH                   // basket centre ≈ 649
+  const ftY      = endlineY - FT_DEPTH                       // FT line ≈ 435
+  const keyLeft  = cx - KEY_W / 2
 
   return (
     <>
       {/* Court rectangle */}
-      <Rect
-        x={HC.x}
-        y={HC.y}
-        width={HC.w}
-        height={HC.h}
-        stroke={COLOR_COURT}
-        strokeWidth={2}
-        fill={COLOR_BG}
-      />
+      <Rect x={COURT_X} y={COURT_Y} width={COURT_W} height={COURT_H_HALF}
+        stroke={COLOR_COURT} strokeWidth={2} fill={COLOR_BG} />
 
-      {/* Paint / key */}
-      <Rect
-        x={keyLeft}
-        y={keyTop}
-        width={HC.keyW}
-        height={HC.keyH}
-        stroke={COLOR_COURT}
-        strokeWidth={1.5}
-        fill="transparent"
-      />
+      {/* Paint / key (endline → FT line) */}
+      <Rect x={keyLeft} y={ftY} width={KEY_W} height={FT_DEPTH}
+        stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
 
-      {/* Free-throw circle: solid half faces midcourt (upward), dashed half faces basket (downward) */}
-      <Arc
-        x={basketX}
-        y={ftCY}
-        innerRadius={HC.ftRadius}
-        outerRadius={HC.ftRadius}
-        angle={180}
-        rotation={180}
-        stroke={COLOR_COURT}
-        strokeWidth={1.5}
-        fill="transparent"
-      />
-      <Arc
-        x={basketX}
-        y={ftCY}
-        innerRadius={HC.ftRadius}
-        outerRadius={HC.ftRadius}
-        angle={180}
-        rotation={0}
-        stroke={COLOR_COURT}
-        strokeWidth={1.5}
-        dash={[6, 4]}
-        fill="transparent"
-      />
+      {/* FT circle — solid half faces midcourt (upward), dashed half faces basket */}
+      <Arc x={cx} y={ftY} innerRadius={FT_RADIUS} outerRadius={FT_RADIUS}
+        angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      <Arc x={cx} y={ftY} innerRadius={FT_RADIUS} outerRadius={FT_RADIUS}
+        angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} dash={[6, 4]} fill="transparent" />
 
-      {/* Three-point arc: rotation=180 → sweeps left→up→right, opening toward midcourt */}
-      <Arc
-        x={basketX}
-        y={basketY}
-        innerRadius={HC.threeRadius}
-        outerRadius={HC.threeRadius}
-        angle={180}
-        rotation={180}
-        stroke={COLOR_COURT}
-        strokeWidth={1.5}
-        fill="transparent"
-      />
+      {/* Three-point arc: bottom basket attacks upward.
+          rotation = 180 + THREE_ARC_HALF → arc sweeps from left-corner clockwise through top to right-corner */}
+      <Arc x={cx} y={basketY} innerRadius={THREE_RADIUS} outerRadius={THREE_RADIUS}
+        angle={THREE_ARC_ANGLE} rotation={180 + THREE_ARC_HALF}
+        stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
 
-      {/* Three-point corner lines */}
-      <Line
-        points={[basketX - HC.threeRadius, basketY, basketX - HC.threeRadius, HC.y + HC.h]}
-        stroke={COLOR_COURT}
-        strokeWidth={1.5}
-      />
-      <Line
-        points={[basketX + HC.threeRadius, basketY, basketX + HC.threeRadius, HC.y + HC.h]}
-        stroke={COLOR_COURT}
-        strokeWidth={1.5}
-      />
+      {/* Three-point corner lines (endline → where arc starts) */}
+      <Line points={[cx - THREE_CX, endlineY, cx - THREE_CX, basketY - THREE_CY]}
+        stroke={COLOR_COURT} strokeWidth={1.5} />
+      <Line points={[cx + THREE_CX, endlineY, cx + THREE_CX, basketY - THREE_CY]}
+        stroke={COLOR_COURT} strokeWidth={1.5} />
 
-      {/* Basket backboard */}
-      <Line
-        points={[basketX - 24, basketY + 10, basketX + 24, basketY + 10]}
-        stroke={COLOR_COURT}
-        strokeWidth={3}
-      />
+      {/* Backboard */}
+      <Line points={[cx - BACKBOARD_HALF, basketY + BACKBOARD_OFFSET,
+                     cx + BACKBOARD_HALF, basketY + BACKBOARD_OFFSET]}
+        stroke={COLOR_COURT} strokeWidth={3} />
 
       {/* Basket hoop */}
-      <Circle
-        x={basketX}
-        y={basketY}
-        radius={10}
-        stroke={COLOR_COURT}
-        strokeWidth={2}
-        fill="transparent"
-      />
+      <Circle x={cx} y={basketY} radius={HOOP_RADIUS}
+        stroke={COLOR_COURT} strokeWidth={2} fill="transparent" />
 
-      {/* Center court mark */}
-      <Circle x={basketX} y={HC.y + 30} radius={5} fill={COLOR_COURT} opacity={0.4} />
+      {/* Centre court mark */}
+      <Circle x={cx} y={COURT_Y + 30} radius={5} fill={COLOR_COURT} opacity={0.4} />
     </>
   )
 }
 
 function FullCourt() {
-  const courtH = CANVAS_H_FULL - 40  // 920
-  const midY = CANVAS_H_FULL / 2     // 480
-  const bX = HC.basketX              // 400
-  const r3 = HC.threeRadius          // 160
-  const rFt = HC.ftRadius            // 60
-  const keyW = HC.keyW               // 160
-  const keyH = HC.keyH               // 190
+  const cx         = COURT_X + COURT_W / 2                   // 400
+  const topEnd     = COURT_Y                                  // 20
+  const botEnd     = COURT_Y + COURT_H_FULL                  // 1439
+  const midY       = Math.round((topEnd + botEnd) / 2)       // 730
 
-  // Top basket at y=60 — attacks downward into court
-  const bTopY = HC.y + 40            // 60
-  const topFtCY = bTopY + keyH       // 250
+  // Top basket (attacks downward toward midcourt)
+  const topBasketY = topEnd + BASKET_DEPTH                   // 100
+  const topFtY     = topEnd + FT_DEPTH                       // 314
 
-  // Bottom basket at y=900 — attacks upward into court (mirrors halfcourt)
-  const bBotY = CANVAS_H_FULL - HC.y - 40  // 900
-  const botFtCY = bBotY - keyH       // 710
+  // Bottom basket (attacks upward toward midcourt — mirrors halfcourt)
+  const botBasketY = botEnd - BASKET_DEPTH                   // 1359
+  const botFtY     = botEnd - FT_DEPTH                       // 1145
+
+  const keyLeft    = cx - KEY_W / 2
 
   return (
     <>
       {/* Court rectangle */}
-      <Rect x={HC.x} y={HC.y} width={HC.w} height={courtH} stroke={COLOR_COURT} strokeWidth={2} fill={COLOR_BG} />
+      <Rect x={COURT_X} y={COURT_Y} width={COURT_W} height={COURT_H_FULL}
+        stroke={COLOR_COURT} strokeWidth={2} fill={COLOR_BG} />
 
-      {/* Half-court line + center circle */}
-      <Line points={[HC.x, midY, HC.x + HC.w, midY]} stroke={COLOR_COURT} strokeWidth={1.5} />
-      <Circle x={bX} y={midY} radius={50} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      {/* Half-court line + centre circle */}
+      <Line points={[COURT_X, midY, COURT_X + COURT_W, midY]}
+        stroke={COLOR_COURT} strokeWidth={1.5} />
+      <Circle x={cx} y={midY} radius={FT_RADIUS}
+        stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
 
       {/* ── TOP BASKET (attacks downward) ── */}
-      <Rect x={bX - keyW / 2} y={bTopY} width={keyW} height={keyH} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      {/* FT circle: solid faces midcourt (downward=90°), dashed faces basket (upward=270°) */}
-      <Arc x={bX} y={topFtCY} innerRadius={rFt} outerRadius={rFt} angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      <Arc x={bX} y={topFtCY} innerRadius={rFt} outerRadius={rFt} angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} dash={[6, 4]} fill="transparent" />
-      {/* Three-point arc: rotation=0 → right→down→left, opening downward into court */}
-      <Arc x={bX} y={bTopY} innerRadius={r3} outerRadius={r3} angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      {/* Corner lines go up to top baseline */}
-      <Line points={[bX - r3, bTopY, bX - r3, HC.y]} stroke={COLOR_COURT} strokeWidth={1.5} />
-      <Line points={[bX + r3, bTopY, bX + r3, HC.y]} stroke={COLOR_COURT} strokeWidth={1.5} />
-      {/* Backboard above basket (between basket and baseline) */}
-      <Line points={[bX - 24, bTopY - 10, bX + 24, bTopY - 10]} stroke={COLOR_COURT} strokeWidth={3} />
-      <Circle x={bX} y={bTopY} radius={10} stroke={COLOR_COURT} strokeWidth={2} fill="transparent" />
+      <Rect x={keyLeft} y={topEnd} width={KEY_W} height={FT_DEPTH}
+        stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      {/* FT circle: solid faces midcourt (downward), dashed faces basket */}
+      <Arc x={cx} y={topFtY} innerRadius={FT_RADIUS} outerRadius={FT_RADIUS}
+        angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      <Arc x={cx} y={topFtY} innerRadius={FT_RADIUS} outerRadius={FT_RADIUS}
+        angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} dash={[6, 4]} fill="transparent" />
+      {/* Three-point arc: rotation = THREE_ARC_HALF → sweeps from right-corner clockwise through bottom to left-corner */}
+      <Arc x={cx} y={topBasketY} innerRadius={THREE_RADIUS} outerRadius={THREE_RADIUS}
+        angle={THREE_ARC_ANGLE} rotation={THREE_ARC_HALF}
+        stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      {/* Corner lines (endline → where arc starts) */}
+      <Line points={[cx - THREE_CX, topEnd, cx - THREE_CX, topBasketY + THREE_CY]}
+        stroke={COLOR_COURT} strokeWidth={1.5} />
+      <Line points={[cx + THREE_CX, topEnd, cx + THREE_CX, topBasketY + THREE_CY]}
+        stroke={COLOR_COURT} strokeWidth={1.5} />
+      {/* Backboard & hoop */}
+      <Line points={[cx - BACKBOARD_HALF, topBasketY - BACKBOARD_OFFSET,
+                     cx + BACKBOARD_HALF, topBasketY - BACKBOARD_OFFSET]}
+        stroke={COLOR_COURT} strokeWidth={3} />
+      <Circle x={cx} y={topBasketY} radius={HOOP_RADIUS}
+        stroke={COLOR_COURT} strokeWidth={2} fill="transparent" />
 
       {/* ── BOTTOM BASKET (attacks upward — mirrors halfcourt) ── */}
-      <Rect x={bX - keyW / 2} y={botFtCY} width={keyW} height={keyH} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      {/* FT circle: solid faces midcourt (upward=270°), dashed faces basket (downward=90°) */}
-      <Arc x={bX} y={botFtCY} innerRadius={rFt} outerRadius={rFt} angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      <Arc x={bX} y={botFtCY} innerRadius={rFt} outerRadius={rFt} angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} dash={[6, 4]} fill="transparent" />
-      {/* Three-point arc: rotation=180 → left→up→right, opening upward into court */}
-      <Arc x={bX} y={bBotY} innerRadius={r3} outerRadius={r3} angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
-      {/* Corner lines go down to bottom baseline */}
-      <Line points={[bX - r3, bBotY, bX - r3, HC.y + courtH]} stroke={COLOR_COURT} strokeWidth={1.5} />
-      <Line points={[bX + r3, bBotY, bX + r3, HC.y + courtH]} stroke={COLOR_COURT} strokeWidth={1.5} />
-      {/* Backboard below basket */}
-      <Line points={[bX - 24, bBotY + 10, bX + 24, bBotY + 10]} stroke={COLOR_COURT} strokeWidth={3} />
-      <Circle x={bX} y={bBotY} radius={10} stroke={COLOR_COURT} strokeWidth={2} fill="transparent" />
+      <Rect x={keyLeft} y={botFtY} width={KEY_W} height={FT_DEPTH}
+        stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      {/* FT circle: solid faces midcourt (upward), dashed faces basket */}
+      <Arc x={cx} y={botFtY} innerRadius={FT_RADIUS} outerRadius={FT_RADIUS}
+        angle={180} rotation={180} stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      <Arc x={cx} y={botFtY} innerRadius={FT_RADIUS} outerRadius={FT_RADIUS}
+        angle={180} rotation={0} stroke={COLOR_COURT} strokeWidth={1.5} dash={[6, 4]} fill="transparent" />
+      {/* Three-point arc: rotation = 180 + THREE_ARC_HALF → sweeps from left-corner clockwise through top to right-corner */}
+      <Arc x={cx} y={botBasketY} innerRadius={THREE_RADIUS} outerRadius={THREE_RADIUS}
+        angle={THREE_ARC_ANGLE} rotation={180 + THREE_ARC_HALF}
+        stroke={COLOR_COURT} strokeWidth={1.5} fill="transparent" />
+      {/* Corner lines (endline → where arc starts) */}
+      <Line points={[cx - THREE_CX, botEnd, cx - THREE_CX, botBasketY - THREE_CY]}
+        stroke={COLOR_COURT} strokeWidth={1.5} />
+      <Line points={[cx + THREE_CX, botEnd, cx + THREE_CX, botBasketY - THREE_CY]}
+        stroke={COLOR_COURT} strokeWidth={1.5} />
+      {/* Backboard & hoop */}
+      <Line points={[cx - BACKBOARD_HALF, botBasketY + BACKBOARD_OFFSET,
+                     cx + BACKBOARD_HALF, botBasketY + BACKBOARD_OFFSET]}
+        stroke={COLOR_COURT} strokeWidth={3} />
+      <Circle x={cx} y={botBasketY} radius={HOOP_RADIUS}
+        stroke={COLOR_COURT} strokeWidth={2} fill="transparent" />
     </>
   )
 }
@@ -598,7 +568,7 @@ export default function PlayEditorPage() {
 
         {/* Canvas */}
         <div
-          className="overflow-hidden rounded-lg border border-secondary/20"
+          className="overflow-auto rounded-lg border border-secondary/20"
           style={{ background: COLOR_BG }}
         >
           <Stage
