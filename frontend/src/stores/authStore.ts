@@ -35,10 +35,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     // importing the store directly (avoids circular dependency).
     registerUnauthorizedHandler(() => {
       set({ user: null, isAuthenticated: false })
-      const pub = ['/login', '/register', '/accept-invite']
-      if (!pub.some((p) => window.location.pathname.startsWith(p))) {
-        window.location.href = '/login'
-      }
+      // ProtectedRoute handles the redirect to /login via React Router — no hard reload needed
     })
 
     set({ isLoading: true })
