@@ -167,7 +167,7 @@ function BoxScoreTable({
 
 type LivePanelStat =
   | { type: 'pts2' } | { type: 'pts3' } | { type: 'ftMade' } | { type: 'ftMiss' }
-  | { type: 'fgMade' } | { type: 'fgMiss' }
+  | { type: 'fgMade' } | { type: 'fgMiss' } | { type: '3pMiss' }
   | { type: 'orbReb' } | { type: 'drbReb' }
   | { type: 'ast' } | { type: 'stl' } | { type: 'blk' } | { type: 'tov' } | { type: 'foul' }
 
@@ -180,6 +180,7 @@ function applyLiveStat(current: GameStats, action: LivePanelStat): GameStats {
     case 'ftMiss': s.fta += 1; break
     case 'fgMade': s.fgm += 1; s.fga += 1; break
     case 'fgMiss': s.fga += 1; break
+    case '3pMiss': s.three_pa += 1; s.fga += 1; break
     case 'orbReb': s.orb += 1; break
     case 'drbReb': s.drb += 1; break
     case 'ast':  s.ast += 1; break
@@ -230,7 +231,9 @@ function LivePanel({
 
           <button className={`${btnBase} ${other} col-span-1`} onClick={() => onAction({ type: 'fgMade' })}>FG ✓</button>
           <button className={`${btnBase} ${other} col-span-1`} onClick={() => onAction({ type: 'fgMiss' })}>FG ✗</button>
+          <button className={`${btnBase} ${other} col-span-1`} onClick={() => onAction({ type: '3pMiss' })}>3P ✗</button>
           <button className={`${btnBase} ${other} col-span-1`} onClick={() => onAction({ type: 'orbReb' })}>ORB</button>
+
           <button className={`${btnBase} ${other} col-span-1`} onClick={() => onAction({ type: 'drbReb' })}>DRB</button>
 
           <button className={`${btnBase} ${other} col-span-1`} onClick={() => onAction({ type: 'ast' })}>AST</button>
@@ -254,9 +257,11 @@ function LiveMode({
   onAction: (userID: string, action: LivePanelStat) => void
   onToggleDNP: (userID: string) => Promise<void>
 }) {
-  const [activePlayer, setActivePlayer] = useState<GamePlayer | null>(null)
+  const [activePlayerID, setActivePlayerID] = useState<string | null>(null)
   const active = players.filter((p) => !p.is_dnp)
   const dnp = players.filter((p) => p.is_dnp)
+  // Derive from props so the panel always shows the latest stats from the store
+  const activePlayer = activePlayerID ? (players.find((p) => p.user_id === activePlayerID) ?? null) : null
 
   return (
     <div>
@@ -266,7 +271,7 @@ function LiveMode({
           return (
             <button
               key={player.user_id}
-              onClick={() => setActivePlayer(player)}
+              onClick={() => setActivePlayerID(player.user_id)}
               className="flex flex-col gap-1 rounded-xl border border-secondary/20 bg-primary p-4 text-left transition-colors hover:border-secondary/40"
             >
               <div className="flex items-center gap-2">
@@ -308,7 +313,7 @@ function LiveMode({
           onAction={(action) => {
             onAction(activePlayer.user_id, action)
           }}
-          onClose={() => setActivePlayer(null)}
+          onClose={() => setActivePlayerID(null)}
         />
       )}
     </div>
