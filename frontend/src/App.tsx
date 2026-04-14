@@ -9,6 +9,7 @@ import RegisterPage from './pages/auth/RegisterPage'
 import AcceptInvitePage from './pages/auth/AcceptInvitePage'
 import TeamsPage from './pages/teams/TeamsPage'
 import TeamDetailPage from './pages/teams/TeamDetailPage'
+import GameDetailPage from './pages/teams/GameDetailPage'
 import PlaybookPage from './pages/playbooks/PlaybookPage'
 
 // Lazy-load the Konva editor so it doesn't bloat the main bundle
@@ -72,6 +73,16 @@ function AppRoutes() {
               <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><Spinner size="lg" /></div>}>
                 <PlayEditorPage />
               </Suspense>
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/games/:gameID"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <GameDetailPage />
             </Layout>
           </ProtectedRoute>
         }
