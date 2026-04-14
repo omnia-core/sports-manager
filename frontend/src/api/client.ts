@@ -78,3 +78,8 @@ export async function del<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, buildRequest('DELETE'))
   return handleResponse<T>(res)
 }
+
+export async function patch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, buildRequest('PATCH', body))
+  return handleResponse<T>(res)
+}
