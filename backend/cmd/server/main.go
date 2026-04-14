@@ -60,6 +60,10 @@ func main() {
 	playbookUC := usecase.NewPlaybookUsecase(playbookRepo, teamRepo)
 	playbookHandler := handlers.NewPlaybookHandler(playbookUC)
 
+	gameRepo := repository.NewGameRepository(db)
+	gameUC := usecase.NewGameUsecase(gameRepo, teamRepo)
+	gameHandler := handlers.NewGameHandler(gameUC)
+
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -67,7 +71,7 @@ func main() {
 	r.Use(chimiddleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{optionalEnv("ALLOWED_ORIGIN", "http://localhost:5173")},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Content-Type"},
 		AllowCredentials: true,
 	}))
@@ -107,6 +111,8 @@ func main() {
 		r.Delete("/{teamID}/members/{userID}", teamHandler.RemoveMember)
 		r.Get("/{teamID}/playbooks", playbookHandler.ListPlaybooks)
 		r.Post("/{teamID}/playbooks", playbookHandler.CreatePlaybook)
+		r.Get("/{teamID}/games", gameHandler.ListGames)
+		r.Post("/{teamID}/games", gameHandler.CreateGame)
 	})
 
 	// Invite routes
@@ -123,6 +129,16 @@ func main() {
 		r.Delete("/{playbookID}", playbookHandler.DeletePlaybook)
 		r.Get("/{playbookID}/plays", playbookHandler.ListPlays)
 		r.Post("/{playbookID}/plays", playbookHandler.CreatePlay)
+	})
+
+	// Game routes
+	r.Route("/api/games", func(r chi.Router) {
+		r.Use(middleware.Authenticate(jwtSecret, authUC))
+		r.Get("/{gameID}", gameHandler.GetGameDetail)
+		r.Put("/{gameID}", gameHandler.UpdateGame)
+		r.Delete("/{gameID}", gameHandler.DeleteGame)
+		r.Put("/{gameID}/stats/{userID}", gameHandler.UpsertStats)
+		r.Patch("/{gameID}/players/{userID}", gameHandler.ToggleDNP)
 	})
 
 	// Play routes
