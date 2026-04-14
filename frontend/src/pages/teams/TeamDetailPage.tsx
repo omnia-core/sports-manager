@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTeamStore } from '../../stores/teamStore'
 import { useAuthStore } from '../../stores/authStore'
 import { usePlaybookStore } from '../../stores/playbookStore'
+import { useGameStore } from '../../stores/gameStore'
 import { teamsApi } from '../../api/teams'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
@@ -10,9 +11,9 @@ import Spinner from '../../components/ui/Spinner'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import { ApiError } from '../../api/client'
-import type { MemberWithUser, Playbook } from '../../types'
+import type { MemberWithUser, Playbook, Game } from '../../types'
 
-type Tab = 'roster' | 'playbooks'
+type Tab = 'roster' | 'playbooks' | 'games'
 
 function RoleBadge({ role }: { role: 'coach' | 'player' }) {
   return <Badge variant={role === 'coach' ? 'blue' : 'gray'}>{role === 'coach' ? 'Coach' : 'Player'}</Badge>
@@ -343,6 +344,125 @@ function PlaybooksTab({ teamID, isCoach }: { teamID: string; isCoach: boolean })
   )
 }
 
+// ─── Games tab ────────────────────────────────────────────────────────────────
+
+function GamesTab({ teamID, isCoach }: { teamID: string; isCoach: boolean }) {
+  const navigate = useNavigate()
+  const { games, isLoading, fetchGames, createGame, deleteGame } = useGameStore()
+  const [showCreate, setShowCreate] = useState(false)
+  const [opponentName, setOpponentName] = useState('')
+  const [gameDate, setGameDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
+
+  useEffect(() => {
+    void fetchGames(teamID)
+  }, [teamID, fetchGames])
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!opponentName.trim()) return
+    setCreating(true)
+    setCreateError('')
+    try {
+      const game = await createGame(teamID, { opponent_name: opponentName.trim(), game_date: gameDate })
+      navigate(`/games/${game.id}`)
+    } catch {
+      setCreateError('Failed to create game.')
+      setCreating(false)
+    }
+  }
+
+  function gameResult(g: Game): string {
+    if (g.team_score === null || g.opponent_score === null) return '—'
+    if (g.team_score > g.opponent_score) return 'W'
+    if (g.team_score < g.opponent_score) return 'L'
+    return 'T'
+  }
+
+  if (isLoading) {
+    return <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm text-foreground/50">{games.length} game{games.length !== 1 ? 's' : ''}</p>
+        {isCoach && <Button onClick={() => setShowCreate((v) => !v)}>Log Game</Button>}
+      </div>
+
+      {showCreate && isCoach && (
+        <form onSubmit={(e) => void handleCreate(e)} className="mb-4 flex flex-col gap-3 rounded-lg border border-secondary/20 bg-primary p-4">
+          <p className="text-sm font-medium text-foreground/70">New Game</p>
+          <div className="flex gap-3">
+            <Input
+              label="Opponent"
+              value={opponentName}
+              onChange={(e) => setOpponentName(e.target.value)}
+              placeholder="e.g. Lakers"
+              className="flex-1"
+            />
+            <Input
+              label="Date"
+              type="date"
+              value={gameDate}
+              onChange={(e) => setGameDate(e.target.value)}
+            />
+          </div>
+          {createError && <p className="text-sm text-red-400">{createError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" type="button" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button type="submit" isLoading={creating}>Create</Button>
+          </div>
+        </form>
+      )}
+
+      {games.length === 0 ? (
+        <div className="rounded-lg border border-secondary/10 bg-primary py-16 text-center">
+          <p className="text-sm text-foreground/40">No games logged yet.</p>
+          {isCoach && <p className="mt-1 text-xs text-foreground/30">Click "Log Game" to add your first game.</p>}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {games.map((g) => {
+            const result = gameResult(g)
+            const resultColor = result === 'W' ? 'text-secondary' : result === 'L' ? 'text-red-400' : 'text-foreground/40'
+            return (
+              <div
+                key={g.id}
+                onClick={() => navigate(`/games/${g.id}`)}
+                className="flex cursor-pointer items-center justify-between rounded-lg border border-secondary/20 bg-primary px-4 py-3 transition-colors hover:border-secondary/40"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-foreground">vs {g.opponent_name}</p>
+                  <p className="text-xs text-foreground/40">{g.game_date}</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm tabular-nums text-foreground/70">
+                    {g.team_score ?? '—'} — {g.opponent_score ?? '—'}
+                  </span>
+                  <span className={`text-sm font-bold ${resultColor}`}>{result}</span>
+                  {isCoach && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); void deleteGame(g.id) }}
+                      className="rounded p-1 text-foreground/30 hover:bg-red-900/30 hover:text-red-400"
+                      aria-label="Delete game"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function TeamDetailPage() {
@@ -431,7 +551,7 @@ export default function TeamDetailPage() {
       {/* Tabs */}
       <div className="mt-6 border-b border-secondary/20">
         <nav className="-mb-px flex gap-6">
-          {(['roster', 'playbooks'] as Tab[]).map((tab) => (
+          {(['roster', 'playbooks', 'games'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -487,6 +607,9 @@ export default function TeamDetailPage() {
         )}
         {activeTab === 'playbooks' && teamID && (
           <PlaybooksTab teamID={teamID} isCoach={isCoach} />
+        )}
+        {activeTab === 'games' && teamID && (
+          <GamesTab teamID={teamID} isCoach={isCoach} />
         )}
       </div>
 
