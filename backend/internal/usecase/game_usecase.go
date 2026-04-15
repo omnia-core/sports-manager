@@ -41,7 +41,11 @@ func (u *gameUsecase) CreateGame(ctx context.Context, req domains.CreateGameRequ
 
 	seedReq := domains.SeedGamePlayersRequest{GameID: res.Game.ID}
 	for _, mwu := range membersRes.Members {
-		seedReq.UserIDs = append(seedReq.UserIDs, mwu.Member.UserID)
+		// Skip placeholder slots — only seed members with a linked user account.
+		if mwu.Member.UserID == nil {
+			continue
+		}
+		seedReq.UserIDs = append(seedReq.UserIDs, *mwu.Member.UserID)
 	}
 	if _, err := u.repo.SeedGamePlayers(ctx, seedReq); err != nil {
 		return domains.CreateGameResponse{}, fmt.Errorf("seed game players: %w", err)

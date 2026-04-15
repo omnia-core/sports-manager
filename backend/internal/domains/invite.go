@@ -43,10 +43,11 @@ type InviteRepository interface {
 // ----------------------------------------------------------------------------
 
 type CreateInviteRequest struct {
-	TeamID   uuid.UUID
-	CallerID uuid.UUID // must be coach on the team
-	Email    string
-	TeamName string // resolved by the usecase; passed to mailer
+	TeamID       uuid.UUID
+	CallerID     uuid.UUID  // must be coach on the team
+	Email        string
+	TeamName     string     // resolved by the usecase; passed to mailer
+	TeamMemberID *uuid.UUID // optional: link invite to a placeholder roster slot
 }
 
 type CreateInviteResponse struct {
@@ -80,12 +81,14 @@ type GetInviteByTeamAndEmailResponse struct {
 }
 
 // AcceptInviteAtomicRequest carries everything the repository needs to execute
-// the accept-invite transaction: mark invite accepted + insert team_members row.
+// the accept-invite transaction: mark invite accepted + upsert team_members row.
+// When TeamMemberID is set the placeholder slot is updated; otherwise a new row is inserted.
 type AcceptInviteAtomicRequest struct {
-	InviteID  uuid.UUID
-	TeamID    uuid.UUID
-	UserID    uuid.UUID
-	ExpiresAt time.Time // used to double-check expiry inside the tx
+	InviteID     uuid.UUID
+	TeamID       uuid.UUID
+	UserID       uuid.UUID
+	TeamMemberID *uuid.UUID // if set, update the placeholder; otherwise insert new row
+	ExpiresAt    time.Time  // used to double-check expiry inside the tx
 }
 
 type AcceptInviteAtomicResponse struct {

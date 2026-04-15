@@ -89,10 +89,11 @@ func (u *inviteUsecase) CreateInvite(ctx context.Context, req domains.CreateInvi
 		return domains.CreateInviteResponse{}, fmt.Errorf("get team: %w", err)
 	}
 
-	// Persist invite — forward only the fields the repository needs.
+	// Persist invite — forward the fields the repository needs.
 	createRes, err := u.inviteRepo.CreateInvite(ctx, domains.CreateInviteRequest{
-		TeamID: req.TeamID,
-		Email:  req.Email,
+		TeamID:       req.TeamID,
+		Email:        req.Email,
+		TeamMemberID: req.TeamMemberID,
 	})
 	if err != nil {
 		return domains.CreateInviteResponse{}, fmt.Errorf("create invite: %w", err)
@@ -124,10 +125,11 @@ func (u *inviteUsecase) AcceptInvite(ctx context.Context, req domains.AcceptInvi
 	}
 
 	atomicRes, err := u.inviteRepo.AcceptInviteAtomic(ctx, domains.AcceptInviteAtomicRequest{
-		InviteID:  inv.ID,
-		TeamID:    inv.TeamID,
-		UserID:    req.UserID,
-		ExpiresAt: inv.ExpiresAt,
+		InviteID:     inv.ID,
+		TeamID:       inv.TeamID,
+		UserID:       req.UserID,
+		TeamMemberID: inv.TeamMemberID,
+		ExpiresAt:    inv.ExpiresAt,
 	})
 	if err != nil {
 		if errors.Is(err, repository.ErrAlreadyMember) {

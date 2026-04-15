@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { teamsApi } from '../api/teams'
-import type { Team, MemberWithUser } from '../types'
+import type { Team, TeamMember, MemberWithUser } from '../types'
 
 interface TeamState {
   teams: Team[]
@@ -14,8 +14,10 @@ interface TeamState {
   createTeam(data: { name: string; sport: string }): Promise<Team>
   updateTeam(teamID: string, data: { name: string }): Promise<Team>
   fetchMembers(teamID: string): Promise<void>
-  inviteMember(teamID: string, email: string): Promise<void>
+  inviteMember(teamID: string, email: string, memberID?: string): Promise<void>
   removeMember(teamID: string, userID: string): Promise<void>
+  addRosterMember(teamID: string, data: { name: string; jersey_number?: number | null; position?: string | null }): Promise<TeamMember>
+  updateMember(teamID: string, memberID: string, data: { jersey_number?: number | null; position?: string | null; name?: string }): Promise<TeamMember>
 }
 
 export const useTeamStore = create<TeamState>((set) => ({
@@ -71,14 +73,29 @@ export const useTeamStore = create<TeamState>((set) => ({
     }
   },
 
-  async inviteMember(teamID: string, email: string) {
-    await teamsApi.inviteMember(teamID, email)
+  async inviteMember(teamID: string, email: string, memberID?: string) {
+    await teamsApi.inviteMember(teamID, email, memberID)
   },
 
   async removeMember(teamID: string, userID: string) {
     await teamsApi.removeMember(teamID, userID)
     set((state) => ({
-      members: state.members.filter((m) => m.user.id !== userID),
+      members: state.members.filter((m) => m.user?.id !== userID),
     }))
+  },
+
+  async addRosterMember(teamID: string, data: { name: string; jersey_number?: number | null; position?: string | null }) {
+    const member = await teamsApi.addRosterMember(teamID, data)
+    const mwu: MemberWithUser = { member, user: null }
+    set((state) => ({ members: [...state.members, mwu] }))
+    return member
+  },
+
+  async updateMember(teamID: string, memberID: string, data: { jersey_number?: number | null; position?: string | null; name?: string }) {
+    const member = await teamsApi.updateMember(teamID, memberID, data)
+    set((state) => ({
+      members: state.members.map((m) => m.member.id === memberID ? { ...m, member } : m),
+    }))
+    return member
   },
 }))

@@ -72,18 +72,19 @@ func insertTeam(ctx context.Context, tx *sql.Tx, req domains.CreateTeamRequest) 
 	return t, nil
 }
 
-// insertMember executes the INSERT into team_members within a transaction.
+// insertMember executes the INSERT into team_members with a required user_id (for coach creation).
 func insertMember(ctx context.Context, tx *sql.Tx, req domains.AddMemberRequest) (*models.TeamMember, error) {
 	const q = `
 		INSERT INTO team_members (team_id, user_id, role)
 		VALUES ($1, $2, $3)
-		RETURNING id, team_id, user_id, role, jersey_number, position, joined_at`
+		RETURNING id, team_id, user_id, name, role, jersey_number, position, joined_at`
 
 	m := &models.TeamMember{}
 	err := tx.QueryRowContext(ctx, q, req.TeamID, req.UserID, req.Role).Scan(
 		&m.ID,
 		&m.TeamID,
 		&m.UserID,
+		&m.Name,
 		&m.Role,
 		&m.JerseyNumber,
 		&m.Position,
@@ -205,7 +206,7 @@ func (r *teamRepository) DeleteTeam(ctx context.Context, req domains.DeleteTeamR
 	return domains.DeleteTeamResponse{}, nil
 }
 
-// RemoveMember deletes a team_members row for the given team+user pair.
+// RemoveMember deletes a team_members row by member ID (not user_id, to handle placeholders).
 func (r *teamRepository) RemoveMember(ctx context.Context, req domains.RemoveMemberRequest) (domains.RemoveMemberResponse, error) {
 	const q = `DELETE FROM team_members WHERE team_id = $1 AND user_id = $2`
 	result, err := r.db.ExecContext(ctx, q, req.TeamID, req.UserID)
@@ -226,7 +227,7 @@ func (r *teamRepository) RemoveMember(ctx context.Context, req domains.RemoveMem
 // or ErrNotFound if no membership exists.
 func (r *teamRepository) GetMembership(ctx context.Context, req domains.GetMembershipRequest) (domains.GetMembershipResponse, error) {
 	const q = `
-		SELECT id, team_id, user_id, role, jersey_number, position, joined_at
+		SELECT id, team_id, user_id, name, role, jersey_number, position, joined_at
 		FROM team_members
 		WHERE team_id = $1 AND user_id = $2`
 
@@ -235,6 +236,7 @@ func (r *teamRepository) GetMembership(ctx context.Context, req domains.GetMembe
 		&m.ID,
 		&m.TeamID,
 		&m.UserID,
+		&m.Name,
 		&m.Role,
 		&m.JerseyNumber,
 		&m.Position,
@@ -249,14 +251,15 @@ func (r *teamRepository) GetMembership(ctx context.Context, req domains.GetMembe
 	return domains.GetMembershipResponse{Member: m}, nil
 }
 
-// ListMembers returns all members of a team joined with their user record.
+// ListMembers returns all members of a team. Placeholder slots (user_id IS NULL) are included;
+// their User pointer will be nil.
 func (r *teamRepository) ListMembers(ctx context.Context, req domains.ListMembersRequest) (domains.ListMembersResponse, error) {
 	const q = `
 		SELECT
-			tm.id, tm.team_id, tm.user_id, tm.role, tm.jersey_number, tm.position, tm.joined_at,
+			tm.id, tm.team_id, tm.user_id, tm.name, tm.role, tm.jersey_number, tm.position, tm.joined_at,
 			u.id, u.email, u.name, u.avatar_url, u.created_at
 		FROM team_members tm
-		JOIN users u ON u.id = tm.user_id
+		LEFT JOIN users u ON u.id = tm.user_id
 		WHERE tm.team_id = $1
 		ORDER BY tm.joined_at ASC`
 
@@ -269,21 +272,44 @@ func (r *teamRepository) ListMembers(ctx context.Context, req domains.ListMember
 	var members []domains.MemberWithUser
 	for rows.Next() {
 		var mwu domains.MemberWithUser
+		// Nullable user columns — user row may not exist for placeholder slots.
+		var (
+			userID        sql.NullString
+			userEmail     sql.NullString
+			userName      sql.NullString
+			userAvatarURL sql.NullString
+			userCreatedAt sql.NullTime
+		)
 		if err := rows.Scan(
 			&mwu.Member.ID,
 			&mwu.Member.TeamID,
 			&mwu.Member.UserID,
+			&mwu.Member.Name,
 			&mwu.Member.Role,
 			&mwu.Member.JerseyNumber,
 			&mwu.Member.Position,
 			&mwu.Member.JoinedAt,
-			&mwu.User.ID,
-			&mwu.User.Email,
-			&mwu.User.Name,
-			&mwu.User.AvatarURL,
-			&mwu.User.CreatedAt,
+			&userID,
+			&userEmail,
+			&userName,
+			&userAvatarURL,
+			&userCreatedAt,
 		); err != nil {
 			return domains.ListMembersResponse{}, fmt.Errorf("scan member row: %w", err)
+		}
+		if userID.Valid {
+			u := &models.User{
+				Email:     userEmail.String,
+				Name:      userName.String,
+				CreatedAt: userCreatedAt.Time,
+			}
+			if err := u.ID.UnmarshalText([]byte(userID.String)); err != nil {
+				return domains.ListMembersResponse{}, fmt.Errorf("parse user id: %w", err)
+			}
+			if userAvatarURL.Valid {
+				u.AvatarURL = &userAvatarURL.String
+			}
+			mwu.User = u
 		}
 		members = append(members, mwu)
 	}
@@ -295,4 +321,59 @@ func (r *teamRepository) ListMembers(ctx context.Context, req domains.ListMember
 		members = []domains.MemberWithUser{}
 	}
 	return domains.ListMembersResponse{Members: members}, nil
+}
+
+// AddRosterMember inserts a placeholder team_members row with no user_id.
+func (r *teamRepository) AddRosterMember(ctx context.Context, req domains.AddRosterMemberRequest) (domains.AddRosterMemberResponse, error) {
+	const q = `
+		INSERT INTO team_members (team_id, name, role, jersey_number, position)
+		VALUES ($1, $2, 'player', $3, $4)
+		RETURNING id, team_id, user_id, name, role, jersey_number, position, joined_at`
+
+	m := &models.TeamMember{}
+	err := r.db.QueryRowContext(ctx, q, req.TeamID, req.Name, req.JerseyNumber, req.Position).Scan(
+		&m.ID,
+		&m.TeamID,
+		&m.UserID,
+		&m.Name,
+		&m.Role,
+		&m.JerseyNumber,
+		&m.Position,
+		&m.JoinedAt,
+	)
+	if err != nil {
+		return domains.AddRosterMemberResponse{}, fmt.Errorf("add roster member: %w", err)
+	}
+	return domains.AddRosterMemberResponse{Member: m}, nil
+}
+
+// UpdateMember updates jersey_number, position, and/or name for an existing roster slot.
+func (r *teamRepository) UpdateMember(ctx context.Context, req domains.UpdateMemberRequest) (domains.UpdateMemberResponse, error) {
+	const q = `
+		UPDATE team_members
+		SET
+			jersey_number = COALESCE($1, jersey_number),
+			position      = COALESCE($2, position),
+			name          = COALESCE($3, name)
+		WHERE id = $4 AND team_id = $5
+		RETURNING id, team_id, user_id, name, role, jersey_number, position, joined_at`
+
+	m := &models.TeamMember{}
+	err := r.db.QueryRowContext(ctx, q, req.JerseyNumber, req.Position, req.Name, req.MemberID, req.TeamID).Scan(
+		&m.ID,
+		&m.TeamID,
+		&m.UserID,
+		&m.Name,
+		&m.Role,
+		&m.JerseyNumber,
+		&m.Position,
+		&m.JoinedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domains.UpdateMemberResponse{}, ErrNotFound
+	}
+	if err != nil {
+		return domains.UpdateMemberResponse{}, fmt.Errorf("update member: %w", err)
+	}
+	return domains.UpdateMemberResponse{Member: m}, nil
 }

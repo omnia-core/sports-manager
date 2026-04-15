@@ -18,7 +18,8 @@ export interface Team {
 export interface TeamMember {
   id: string
   team_id: string
-  user_id: string
+  user_id: string | null   // null for placeholder roster slots
+  name: string | null      // display name for placeholder slots
   role: 'coach' | 'player'
   jersey_number: number | null
   position: string | null
@@ -32,7 +33,7 @@ export interface MemberWithUser {
     name: string
     email: string
     avatar_url: string | null
-  }
+  } | null  // null for placeholder roster slots
 }
 
 export interface Playbook {

@@ -244,6 +244,100 @@ func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// --- AddRosterMember ---------------------------------------------------
+
+type addRosterMemberRequest struct {
+	Name         string `json:"name"`
+	JerseyNumber *int   `json:"jersey_number"`
+	Position     *string `json:"position"`
+}
+
+// AddRosterMember handles POST /api/teams/:teamID/roster.
+// Adds a named placeholder slot without requiring an existing user account.
+func (h *TeamHandler) AddRosterMember(w http.ResponseWriter, r *http.Request) {
+	caller, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, errBody("not authenticated"))
+		return
+	}
+
+	teamID, err := parseUUIDParam(r, "teamID")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid team ID"))
+		return
+	}
+
+	var body addRosterMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request body"))
+		return
+	}
+
+	res, err := h.usecase.AddRosterMember(r.Context(), domains.AddRosterMemberRequest{
+		TeamID:       teamID,
+		CallerID:     caller.ID,
+		Name:         body.Name,
+		JerseyNumber: body.JerseyNumber,
+		Position:     body.Position,
+	})
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, res.Member)
+}
+
+// --- UpdateMember ------------------------------------------------------
+
+type updateMemberRequest struct {
+	JerseyNumber *int    `json:"jersey_number"`
+	Position     *string `json:"position"`
+	Name         *string `json:"name"`
+}
+
+// UpdateMember handles PUT /api/teams/:teamID/members/:memberID.
+func (h *TeamHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
+	caller, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, errBody("not authenticated"))
+		return
+	}
+
+	teamID, err := parseUUIDParam(r, "teamID")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid team ID"))
+		return
+	}
+
+	memberID, err := parseUUIDParam(r, "memberID")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid member ID"))
+		return
+	}
+
+	var body updateMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid request body"))
+		return
+	}
+
+	res, err := h.usecase.UpdateMember(r.Context(), domains.UpdateMemberRequest{
+		TeamID:       teamID,
+		MemberID:     memberID,
+		CallerID:     caller.ID,
+		JerseyNumber: body.JerseyNumber,
+		Position:     body.Position,
+		Name:         body.Name,
+	})
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res.Member)
+}
+
 // --- helpers -----------------------------------------------------------
 
 // parseUUIDParam extracts and parses a named chi URL parameter as a UUID.
