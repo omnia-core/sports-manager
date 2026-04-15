@@ -77,6 +77,12 @@ func (f *fakeTeamRepo) DeleteTeam(ctx context.Context, req domains.DeleteTeamReq
 func (f *fakeTeamRepo) RemoveMember(ctx context.Context, req domains.RemoveMemberRequest) (domains.RemoveMemberResponse, error) {
 	return domains.RemoveMemberResponse{}, nil
 }
+func (f *fakeTeamRepo) AddRosterMember(ctx context.Context, req domains.AddRosterMemberRequest) (domains.AddRosterMemberResponse, error) {
+	return domains.AddRosterMemberResponse{}, nil
+}
+func (f *fakeTeamRepo) UpdateMember(ctx context.Context, req domains.UpdateMemberRequest) (domains.UpdateMemberResponse, error) {
+	return domains.UpdateMemberResponse{}, nil
+}
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 

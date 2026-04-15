@@ -18,7 +18,7 @@ var ErrAlreadyMember = errors.New("user is already a member of this team")
 //
 // Transaction design note: AcceptInviteAtomic manages its own transaction
 // internally. This keeps *sql.Tx out of the usecase layer and ensures the
-// two writes (insert team_members + update invite status) are always atomic
+// two writes (upsert team_members + update invite status) are always atomic
 // without leaking DB primitives beyond the repository boundary.
 type inviteRepository struct {
 	db *sql.DB
@@ -32,17 +32,18 @@ func NewInviteRepository(db *sql.DB) domains.InviteRepository {
 // CreateInvite inserts a new team_invites row and returns the created record.
 func (r *inviteRepository) CreateInvite(ctx context.Context, req domains.CreateInviteRequest) (domains.CreateInviteResponse, error) {
 	const q = `
-		INSERT INTO team_invites (team_id, email)
-		VALUES ($1, $2)
-		RETURNING id, team_id, email, token, status, expires_at, created_at`
+		INSERT INTO team_invites (team_id, email, team_member_id)
+		VALUES ($1, $2, $3)
+		RETURNING id, team_id, email, token, status, team_member_id, expires_at, created_at`
 
 	inv := &models.TeamInvite{}
-	err := r.db.QueryRowContext(ctx, q, req.TeamID, req.Email).Scan(
+	err := r.db.QueryRowContext(ctx, q, req.TeamID, req.Email, req.TeamMemberID).Scan(
 		&inv.ID,
 		&inv.TeamID,
 		&inv.Email,
 		&inv.Token,
 		&inv.Status,
+		&inv.TeamMemberID,
 		&inv.ExpiresAt,
 		&inv.CreatedAt,
 	)
@@ -55,7 +56,7 @@ func (r *inviteRepository) CreateInvite(ctx context.Context, req domains.CreateI
 // GetInviteByToken returns the invite matching the given token, or ErrNotFound.
 func (r *inviteRepository) GetInviteByToken(ctx context.Context, req domains.GetInviteByTokenRequest) (domains.GetInviteByTokenResponse, error) {
 	const q = `
-		SELECT id, team_id, email, token, status, expires_at, created_at
+		SELECT id, team_id, email, token, status, team_member_id, expires_at, created_at
 		FROM team_invites
 		WHERE token = $1`
 
@@ -66,6 +67,7 @@ func (r *inviteRepository) GetInviteByToken(ctx context.Context, req domains.Get
 		&inv.Email,
 		&inv.Token,
 		&inv.Status,
+		&inv.TeamMemberID,
 		&inv.ExpiresAt,
 		&inv.CreatedAt,
 	)
@@ -82,7 +84,7 @@ func (r *inviteRepository) GetInviteByToken(ctx context.Context, req domains.Get
 // pair, or ErrNotFound. Used to enforce the no-duplicate-pending-invite rule.
 func (r *inviteRepository) GetInviteByTeamAndEmail(ctx context.Context, req domains.GetInviteByTeamAndEmailRequest) (domains.GetInviteByTeamAndEmailResponse, error) {
 	const q = `
-		SELECT id, team_id, email, token, status, expires_at, created_at
+		SELECT id, team_id, email, token, status, team_member_id, expires_at, created_at
 		FROM team_invites
 		WHERE team_id = $1 AND email = $2
 		ORDER BY created_at DESC
@@ -95,6 +97,7 @@ func (r *inviteRepository) GetInviteByTeamAndEmail(ctx context.Context, req doma
 		&inv.Email,
 		&inv.Token,
 		&inv.Status,
+		&inv.TeamMemberID,
 		&inv.ExpiresAt,
 		&inv.CreatedAt,
 	)
@@ -107,16 +110,12 @@ func (r *inviteRepository) GetInviteByTeamAndEmail(ctx context.Context, req doma
 	return domains.GetInviteByTeamAndEmailResponse{Invite: inv}, nil
 }
 
-// AcceptInviteAtomic inserts a team_members row for the accepting user and
-// marks the invite as accepted, all within a single transaction. If either
-// write fails the transaction is rolled back and an error is returned.
+// AcceptInviteAtomic marks the invite accepted and either updates the placeholder
+// roster slot (when TeamMemberID is set) or inserts a new team_members row,
+// all within a single transaction.
 //
-// The UPDATE re-checks expires_at inside the transaction to close the
-// TOCTOU window between the usecase's expiry check and this write. If 0
-// rows are updated, the invite has expired concurrently and ErrInviteInvalid
-// is returned (mapped from the usecase sentinel in the handler).
-//
-// If the user is already a member of the team, ErrAlreadyMember is returned.
+// The UPDATE re-checks expires_at inside the transaction to close the TOCTOU
+// window between the usecase's expiry check and this write.
 func (r *inviteRepository) AcceptInviteAtomic(ctx context.Context, req domains.AcceptInviteAtomicRequest) (domains.AcceptInviteAtomicResponse, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -124,11 +123,40 @@ func (r *inviteRepository) AcceptInviteAtomic(ctx context.Context, req domains.A
 	}
 	defer tx.Rollback() //nolint:errcheck // rolled back on error paths; committed on success
 
-	m, err := insertMember(ctx, tx, domains.AddMemberRequest{
-		TeamID: req.TeamID,
-		UserID: req.UserID,
-		Role:   "player",
-	})
+	var m *models.TeamMember
+	if req.TeamMemberID != nil {
+		// Update the placeholder slot: set user_id to link the account.
+		const updateMemberQ = `
+			UPDATE team_members
+			SET user_id = $1
+			WHERE id = $2 AND team_id = $3 AND user_id IS NULL
+			RETURNING id, team_id, user_id, name, role, jersey_number, position, joined_at`
+		m = &models.TeamMember{}
+		err = tx.QueryRowContext(ctx, updateMemberQ, req.UserID, req.TeamMemberID, req.TeamID).Scan(
+			&m.ID,
+			&m.TeamID,
+			&m.UserID,
+			&m.Name,
+			&m.Role,
+			&m.JerseyNumber,
+			&m.Position,
+			&m.JoinedAt,
+		)
+		if errors.Is(err, sql.ErrNoRows) {
+			// Slot was already claimed or doesn't exist — fall back to inserting a new row.
+			m, err = insertMember(ctx, tx, domains.AddMemberRequest{
+				TeamID: req.TeamID,
+				UserID: req.UserID,
+				Role:   "player",
+			})
+		}
+	} else {
+		m, err = insertMember(ctx, tx, domains.AddMemberRequest{
+			TeamID: req.TeamID,
+			UserID: req.UserID,
+			Role:   "player",
+		})
+	}
 	if err != nil {
 		// Unique constraint violation: user is already on this team.
 		var pqErr *pq.Error

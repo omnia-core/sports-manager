@@ -120,6 +120,39 @@ func (u *teamUsecase) ListMembers(ctx context.Context, req domains.ListMembersRe
 	return res, nil
 }
 
+// AddRosterMember verifies the caller is a coach, then inserts a placeholder
+// roster slot (no user account required).
+func (u *teamUsecase) AddRosterMember(ctx context.Context, req domains.AddRosterMemberRequest) (domains.AddRosterMemberResponse, error) {
+	if err := requireCoach(ctx, u.repo, req.TeamID, req.CallerID); err != nil {
+		return domains.AddRosterMemberResponse{}, err
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		return domains.AddRosterMemberResponse{}, ErrNameRequired
+	}
+	res, err := u.repo.AddRosterMember(ctx, req)
+	if err != nil {
+		return domains.AddRosterMemberResponse{}, fmt.Errorf("add roster member: %w", err)
+	}
+	return res, nil
+}
+
+// UpdateMember verifies the caller is a coach, then updates jersey/position/name
+// for the given roster slot.
+func (u *teamUsecase) UpdateMember(ctx context.Context, req domains.UpdateMemberRequest) (domains.UpdateMemberResponse, error) {
+	if err := requireCoach(ctx, u.repo, req.TeamID, req.CallerID); err != nil {
+		return domains.UpdateMemberResponse{}, err
+	}
+	res, err := u.repo.UpdateMember(ctx, req)
+	if errors.Is(err, repository.ErrNotFound) {
+		return domains.UpdateMemberResponse{}, repository.ErrNotFound
+	}
+	if err != nil {
+		return domains.UpdateMemberResponse{}, fmt.Errorf("update member: %w", err)
+	}
+	return res, nil
+}
+
 // RemoveMember verifies the caller is a coach, prevents removing the coach,
 // then removes the target user from the team.
 func (u *teamUsecase) RemoveMember(ctx context.Context, req domains.RemoveMemberRequest) (domains.RemoveMemberResponse, error) {

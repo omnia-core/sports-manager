@@ -20,6 +20,8 @@ type TeamUsecase interface {
 	DeleteTeam(ctx context.Context, req DeleteTeamRequest) (DeleteTeamResponse, error)
 	ListMembers(ctx context.Context, req ListMembersRequest) (ListMembersResponse, error)
 	RemoveMember(ctx context.Context, req RemoveMemberRequest) (RemoveMemberResponse, error)
+	AddRosterMember(ctx context.Context, req AddRosterMemberRequest) (AddRosterMemberResponse, error)
+	UpdateMember(ctx context.Context, req UpdateMemberRequest) (UpdateMemberResponse, error)
 }
 
 // ----------------------------------------------------------------------------
@@ -36,6 +38,8 @@ type TeamRepository interface {
 	GetMembership(ctx context.Context, req GetMembershipRequest) (GetMembershipResponse, error)
 	ListMembers(ctx context.Context, req ListMembersRequest) (ListMembersResponse, error)
 	RemoveMember(ctx context.Context, req RemoveMemberRequest) (RemoveMemberResponse, error)
+	AddRosterMember(ctx context.Context, req AddRosterMemberRequest) (AddRosterMemberResponse, error)
+	UpdateMember(ctx context.Context, req UpdateMemberRequest) (UpdateMemberResponse, error)
 }
 
 // ----------------------------------------------------------------------------
@@ -44,9 +48,10 @@ type TeamRepository interface {
 
 // MemberWithUser pairs a TeamMember record with its associated User so the
 // frontend can render a roster without issuing extra requests.
+// User is nil for placeholder roster slots with no linked account.
 type MemberWithUser struct {
 	Member models.TeamMember `json:"member"`
-	User   models.User       `json:"user"`
+	User   *models.User      `json:"user"`
 }
 
 // ----------------------------------------------------------------------------
@@ -133,3 +138,30 @@ type RemoveMemberRequest struct {
 }
 
 type RemoveMemberResponse struct{}
+
+// AddRosterMemberRequest adds a placeholder roster slot (no user account required).
+type AddRosterMemberRequest struct {
+	TeamID       uuid.UUID
+	CallerID     uuid.UUID
+	Name         string
+	JerseyNumber *int
+	Position     *string
+}
+
+type AddRosterMemberResponse struct {
+	Member *models.TeamMember
+}
+
+// UpdateMemberRequest updates jersey number and/or position for a roster slot.
+type UpdateMemberRequest struct {
+	TeamID       uuid.UUID
+	MemberID     uuid.UUID
+	CallerID     uuid.UUID
+	JerseyNumber *int
+	Position     *string
+	Name         *string
+}
+
+type UpdateMemberResponse struct {
+	Member *models.TeamMember
+}

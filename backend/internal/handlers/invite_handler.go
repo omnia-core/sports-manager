@@ -23,7 +23,8 @@ func NewInviteHandler(uc domains.InviteUsecase) *InviteHandler {
 // --- CreateInvite ------------------------------------------------------
 
 type createInviteRequest struct {
-	Email string `json:"email"`
+	Email        string     `json:"email"`
+	MemberID     *uuid.UUID `json:"member_id"` // optional: link to a placeholder roster slot
 }
 
 // CreateInvite handles POST /api/teams/:teamID/members.
@@ -48,9 +49,10 @@ func (h *InviteHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := h.usecase.CreateInvite(r.Context(), domains.CreateInviteRequest{
-		TeamID:   teamID,
-		CallerID: caller.ID,
-		Email:    body.Email,
+		TeamID:       teamID,
+		CallerID:     caller.ID,
+		Email:        body.Email,
+		TeamMemberID: body.MemberID,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)

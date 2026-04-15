@@ -19,55 +19,204 @@ function RoleBadge({ role }: { role: 'coach' | 'player' }) {
   return <Badge variant={role === 'coach' ? 'blue' : 'gray'}>{role === 'coach' ? 'Coach' : 'Player'}</Badge>
 }
 
+// ─── Add Roster Member Form ───────────────────────────────────────────────────
+
+function AddRosterForm({ teamID, onDone }: { teamID: string; onDone: () => void }) {
+  const { addRosterMember } = useTeamStore()
+  const [name, setName] = useState('')
+  const [jersey, setJersey] = useState('')
+  const [position, setPosition] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return
+    setIsLoading(true)
+    setError('')
+    try {
+      await addRosterMember(teamID, {
+        name: name.trim(),
+        jersey_number: jersey ? parseInt(jersey, 10) : null,
+        position: position.trim() || null,
+      })
+      setName('')
+      setJersey('')
+      setPosition('')
+      onDone()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to add player.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 flex flex-col gap-3 rounded-lg border border-secondary/20 bg-primary p-4">
+      <p className="text-sm font-medium text-foreground/70">Add player to roster</p>
+      <div className="flex gap-2">
+        <Input
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Player name"
+          className="flex-1"
+          disabled={isLoading}
+        />
+        <Input
+          label="Jersey #"
+          type="number"
+          value={jersey}
+          onChange={(e) => setJersey(e.target.value)}
+          placeholder="23"
+          className="w-24"
+          disabled={isLoading}
+        />
+        <Input
+          label="Position"
+          value={position}
+          onChange={(e) => setPosition(e.target.value)}
+          placeholder="PG"
+          className="w-24"
+          disabled={isLoading}
+        />
+      </div>
+      {error && <p className="text-sm text-red-400">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" type="button" onClick={onDone}>Cancel</Button>
+        <Button type="submit" isLoading={isLoading}>Add Player</Button>
+      </div>
+    </form>
+  )
+}
+
+// ─── Inline Invite Form (for placeholder slots) ───────────────────────────────
+
+function SlotInviteForm({ teamID, memberID, onDone }: { teamID: string; memberID: string; onDone: () => void }) {
+  const { inviteMember } = useTeamStore()
+  const [email, setEmail] = useState('')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [message, setMessage] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!email.trim() || status === 'loading') return
+    setStatus('loading')
+    setMessage('')
+    try {
+      await inviteMember(teamID, email.trim(), memberID)
+      setStatus('success')
+      setMessage(`Invite sent to ${email.trim()}.`)
+    } catch (err) {
+      setStatus('error')
+      setMessage(err instanceof ApiError ? err.message : 'Failed to send invite.')
+    }
+  }
+
+  if (status === 'success') {
+    return (
+      <div className="mt-2 flex items-center gap-2">
+        <p className="text-xs text-accent">{message}</p>
+        <button onClick={onDone} className="text-xs text-foreground/40 hover:text-foreground">Done</button>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={(e) => void handleSubmit(e)} className="mt-2 flex gap-2">
+      <Input
+        label=""
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="player@example.com"
+        className="flex-1"
+        disabled={status === 'loading'}
+      />
+      <Button type="submit" isLoading={status === 'loading'} className="self-end">Send</Button>
+      <Button variant="secondary" type="button" onClick={onDone} className="self-end">Cancel</Button>
+      {status === 'error' && <p className="text-xs text-red-400">{message}</p>}
+    </form>
+  )
+}
+
+// ─── Member Row ───────────────────────────────────────────────────────────────
+
 function MemberRow({
   mwu,
+  teamID,
   isCoach,
   isCurrentUser,
   onRemove,
 }: {
   mwu: MemberWithUser
+  teamID: string
   isCoach: boolean
   isCurrentUser: boolean
   onRemove: () => void
 }) {
   const { member, user } = mwu
   const canRemove = isCoach && member.role !== 'coach'
+  const isPlaceholder = user === null
+  const displayName = isPlaceholder ? (member.name ?? 'Unnamed') : user.name
+  const [showInvite, setShowInvite] = useState(false)
 
   return (
-    <div className="flex items-center gap-4 border-b border-secondary/10 py-3 last:border-0">
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-secondary/20 text-sm font-semibold text-accent">
-        {user.name.charAt(0).toUpperCase()}
+    <div className="border-b border-secondary/10 py-3 last:border-0">
+      <div className="flex items-center gap-4">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-secondary/20 text-sm font-semibold text-accent">
+          {displayName.charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">
+            {displayName}
+            {isCurrentUser && <span className="ml-1 text-xs text-foreground/30">(you)</span>}
+          </p>
+          {isPlaceholder ? (
+            <p className="text-xs text-foreground/30 italic">No account yet</p>
+          ) : (
+            <p className="truncate text-xs text-foreground/40">{user.email}</p>
+          )}
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {member.jersey_number !== null && (
+            <span className="text-xs text-foreground/40">#{member.jersey_number}</span>
+          )}
+          {member.position && (
+            <span className="text-xs text-foreground/40">{member.position}</span>
+          )}
+          <RoleBadge role={member.role} />
+          {isCoach && isPlaceholder && !showInvite && (
+            <button
+              onClick={() => setShowInvite(true)}
+              className="rounded px-2 py-1 text-xs text-accent border border-secondary/30 hover:bg-secondary/10"
+            >
+              Invite
+            </button>
+          )}
+          {canRemove && (
+            <button
+              onClick={onRemove}
+              className="rounded p-1 text-foreground/30 hover:bg-red-900/30 hover:text-red-400"
+              aria-label={`Remove ${displayName}`}
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">
-          {user.name}
-          {isCurrentUser && <span className="ml-1 text-xs text-foreground/30">(you)</span>}
-        </p>
-        <p className="truncate text-xs text-foreground/40">{user.email}</p>
-      </div>
-      <div className="flex flex-shrink-0 items-center gap-2">
-        {member.jersey_number !== null && (
-          <span className="text-xs text-foreground/40">#{member.jersey_number}</span>
-        )}
-        {member.position && (
-          <span className="text-xs text-foreground/40">{member.position}</span>
-        )}
-        <RoleBadge role={member.role} />
-        {canRemove && (
-          <button
-            onClick={onRemove}
-            className="rounded p-1 text-foreground/30 hover:bg-red-900/30 hover:text-red-400"
-            aria-label={`Remove ${user.name}`}
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
-      </div>
+      {showInvite && (
+        <div className="mt-2 pl-13">
+          <SlotInviteForm teamID={teamID} memberID={member.id} onDone={() => setShowInvite(false)} />
+        </div>
+      )}
     </div>
   )
 }
+
+// ─── General Invite Form ──────────────────────────────────────────────────────
 
 function InviteForm({ teamID }: { teamID: string }) {
   const { inviteMember } = useTeamStore()
@@ -93,7 +242,7 @@ function InviteForm({ teamID }: { teamID: string }) {
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 flex flex-col gap-3 rounded-lg border border-secondary/20 bg-primary p-4">
-      <p className="text-sm font-medium text-foreground/70">Invite a player</p>
+      <p className="text-sm font-medium text-foreground/70">Invite by email</p>
       <div className="flex gap-2">
         <Input
           label=""
@@ -475,6 +624,7 @@ export default function TeamDetailPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [removeError, setRemoveError] = useState<string | null>(null)
+  const [showAddRoster, setShowAddRoster] = useState(false)
 
   useEffect(() => {
     if (!teamID) return
@@ -497,8 +647,8 @@ export default function TeamDetailPage() {
     }
   }
 
-  async function handleRemoveMember(userID: string, userName: string) {
-    if (!teamID || !window.confirm(`Remove ${userName} from this team?`)) return
+  async function handleRemoveMember(userID: string, displayName: string) {
+    if (!teamID || !window.confirm(`Remove ${displayName} from this team?`)) return
     setRemoveError(null)
     try {
       await removeMember(teamID, userID)
@@ -582,25 +732,39 @@ export default function TeamDetailPage() {
                     {removeError}
                   </p>
                 )}
+                <div className="mb-4 flex items-center justify-between">
+                  <p className="text-sm text-foreground/50">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+                  {isCoach && (
+                    <Button onClick={() => setShowAddRoster((v) => !v)}>Add Player</Button>
+                  )}
+                </div>
                 <div className="rounded-lg border border-secondary/20 bg-primary px-4">
                   {members.length === 0 ? (
                     <p className="py-8 text-center text-sm text-foreground/40">
                       No members yet.
-                      {isCoach && <span className="block mt-1 text-xs text-foreground/30">Use "Invite a player" below to add members.</span>}
+                      {isCoach && <span className="block mt-1 text-xs text-foreground/30">Use "Add Player" to add roster slots.</span>}
                     </p>
                   ) : (
                     members.map((mwu) => (
                       <MemberRow
                         key={mwu.member.id}
                         mwu={mwu}
+                        teamID={teamID!}
                         isCoach={isCoach}
-                        isCurrentUser={mwu.user.id === user?.id}
-                        onRemove={() => void handleRemoveMember(mwu.user.id, mwu.user.name)}
+                        isCurrentUser={mwu.user?.id === user?.id}
+                        onRemove={() => {
+                          const id = mwu.user?.id
+                          const name = mwu.user?.name ?? mwu.member.name ?? 'player'
+                          if (id) void handleRemoveMember(id, name)
+                        }}
                       />
                     ))
                   )}
                 </div>
               </>
+            )}
+            {isCoach && teamID && showAddRoster && (
+              <AddRosterForm teamID={teamID} onDone={() => setShowAddRoster(false)} />
             )}
             {isCoach && teamID && <InviteForm teamID={teamID} />}
           </div>

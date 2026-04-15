@@ -1,5 +1,5 @@
 import { get, post, put, del } from './client'
-import type { Team, MemberWithUser } from '../types'
+import type { Team, TeamMember, MemberWithUser } from '../types'
 
 export const teamsApi = {
   list(): Promise<{ teams: Team[] }> {
@@ -26,11 +26,19 @@ export const teamsApi = {
     return get<{ members: MemberWithUser[] }>(`/api/teams/${teamID}/members`)
   },
 
-  inviteMember(teamID: string, email: string): Promise<void> {
-    return post<void>(`/api/teams/${teamID}/members`, { email })
+  inviteMember(teamID: string, email: string, memberID?: string): Promise<void> {
+    return post<void>(`/api/teams/${teamID}/members`, { email, member_id: memberID ?? undefined })
   },
 
   removeMember(teamID: string, userID: string): Promise<void> {
     return del<void>(`/api/teams/${teamID}/members/${userID}`)
+  },
+
+  addRosterMember(teamID: string, data: { name: string; jersey_number?: number | null; position?: string | null }): Promise<TeamMember> {
+    return post<TeamMember>(`/api/teams/${teamID}/roster`, data)
+  },
+
+  updateMember(teamID: string, memberID: string, data: { jersey_number?: number | null; position?: string | null; name?: string }): Promise<TeamMember> {
+    return put<TeamMember>(`/api/teams/${teamID}/members/${memberID}`, data)
   },
 }
