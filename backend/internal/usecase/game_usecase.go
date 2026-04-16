@@ -78,6 +78,23 @@ func (u *gameUsecase) GetGameDetail(ctx context.Context, req domains.GetGameDeta
 		return domains.GetGameDetailResponse{}, err
 	}
 
+	// Seed any team members added after game creation. ON CONFLICT DO NOTHING makes this idempotent.
+	membersRes, err := u.teamRepo.ListMembers(ctx, domains.ListMembersRequest{TeamID: gameRes.Game.TeamID, CallerID: req.CallerID})
+	if err != nil {
+		return domains.GetGameDetailResponse{}, fmt.Errorf("list members for reseed: %w", err)
+	}
+	seedReq := domains.SeedGamePlayersRequest{GameID: req.GameID}
+	for _, mwu := range membersRes.Members {
+		if mwu.Member.UserID != nil {
+			seedReq.UserIDs = append(seedReq.UserIDs, *mwu.Member.UserID)
+		}
+	}
+	if len(seedReq.UserIDs) > 0 {
+		if _, err := u.repo.SeedGamePlayers(ctx, seedReq); err != nil {
+			return domains.GetGameDetailResponse{}, fmt.Errorf("reseed game players: %w", err)
+		}
+	}
+
 	res, err := u.repo.GetGameDetail(ctx, req)
 	if err != nil {
 		return domains.GetGameDetailResponse{}, fmt.Errorf("get game detail: %w", err)

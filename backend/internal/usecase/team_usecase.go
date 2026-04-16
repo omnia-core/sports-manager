@@ -153,20 +153,11 @@ func (u *teamUsecase) UpdateMember(ctx context.Context, req domains.UpdateMember
 	return res, nil
 }
 
-// RemoveMember verifies the caller is a coach, prevents removing the coach,
-// then removes the target user from the team.
+// RemoveMember verifies the caller is a coach, then removes the target member.
+// The repository rejects attempts to remove a coach-role member.
 func (u *teamUsecase) RemoveMember(ctx context.Context, req domains.RemoveMemberRequest) (domains.RemoveMemberResponse, error) {
 	if err := requireCoach(ctx, u.repo, req.TeamID, req.CallerID); err != nil {
 		return domains.RemoveMemberResponse{}, err
-	}
-
-	// Prevent removing the coach from their own team.
-	teamRes, err := u.repo.GetTeam(ctx, domains.GetTeamRequest{TeamID: req.TeamID, CallerID: req.CallerID})
-	if err != nil {
-		return domains.RemoveMemberResponse{}, fmt.Errorf("get team: %w", err)
-	}
-	if teamRes.Team.CoachID == req.UserID {
-		return domains.RemoveMemberResponse{}, ErrCannotRemoveCoach
 	}
 
 	res, err := u.repo.RemoveMember(ctx, req)

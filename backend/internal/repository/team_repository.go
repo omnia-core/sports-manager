@@ -206,10 +206,13 @@ func (r *teamRepository) DeleteTeam(ctx context.Context, req domains.DeleteTeamR
 	return domains.DeleteTeamResponse{}, nil
 }
 
-// RemoveMember deletes a team_members row by member ID (not user_id, to handle placeholders).
+// RemoveMember deletes a team_members row by member ID. Coaches cannot be removed.
 func (r *teamRepository) RemoveMember(ctx context.Context, req domains.RemoveMemberRequest) (domains.RemoveMemberResponse, error) {
-	const q = `DELETE FROM team_members WHERE team_id = $1 AND user_id = $2`
-	result, err := r.db.ExecContext(ctx, q, req.TeamID, req.UserID)
+	// Delete by member ID; the role != 'coach' guard prevents removing the coach.
+	result, err := r.db.ExecContext(ctx,
+		`DELETE FROM team_members WHERE id = $1 AND team_id = $2 AND role != 'coach'`,
+		req.MemberID, req.TeamID,
+	)
 	if err != nil {
 		return domains.RemoveMemberResponse{}, fmt.Errorf("remove member: %w", err)
 	}

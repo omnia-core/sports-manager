@@ -225,15 +225,15 @@ func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := parseUUIDParam(r, "userID")
+	memberID, err := parseUUIDParam(r, "memberID")
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errBody("invalid user ID"))
+		writeJSON(w, http.StatusBadRequest, errBody("invalid member ID"))
 		return
 	}
 
 	_, err = h.usecase.RemoveMember(r.Context(), domains.RemoveMemberRequest{
 		TeamID:   teamID,
-		UserID:   userID,
+		MemberID: memberID,
 		CallerID: caller.ID,
 	})
 	if err != nil {

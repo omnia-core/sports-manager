@@ -30,8 +30,8 @@ export const teamsApi = {
     return post<void>(`/api/teams/${teamID}/members`, { email, member_id: memberID ?? undefined })
   },
 
-  removeMember(teamID: string, userID: string): Promise<void> {
-    return del<void>(`/api/teams/${teamID}/members/${userID}`)
+  removeMember(teamID: string, memberID: string): Promise<void> {
+    return del<void>(`/api/teams/${teamID}/members/${memberID}`)
   },
 
   addRosterMember(teamID: string, data: { name: string; jersey_number?: number | null; position?: string | null }): Promise<TeamMember> {

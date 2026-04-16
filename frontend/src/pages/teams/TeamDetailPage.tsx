@@ -140,6 +140,80 @@ function SlotInviteForm({ teamID, memberID, onDone }: { teamID: string; memberID
   )
 }
 
+// ─── Inline Edit Form ─────────────────────────────────────────────────────────
+
+function EditMemberForm({
+  teamID,
+  mwu,
+  onDone,
+}: {
+  teamID: string
+  mwu: MemberWithUser
+  onDone: () => void
+}) {
+  const { updateMember } = useTeamStore()
+  const { member, user } = mwu
+  const isPlaceholder = user === null
+  const [name, setName] = useState(member.name ?? '')
+  const [jersey, setJersey] = useState(member.jersey_number !== null ? String(member.jersey_number) : '')
+  const [position, setPosition] = useState(member.position ?? '')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setIsLoading(true)
+    setError('')
+    try {
+      await updateMember(teamID, member.id, {
+        jersey_number: jersey ? parseInt(jersey, 10) : null,
+        position: position.trim() || null,
+        name: isPlaceholder ? (name.trim() || undefined) : undefined,
+      })
+      onDone()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={(e) => void handleSubmit(e)} className="mt-2 flex flex-wrap items-end gap-2">
+      {isPlaceholder && (
+        <Input
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Player name"
+          className="w-36"
+          disabled={isLoading}
+        />
+      )}
+      <Input
+        label="Jersey #"
+        type="number"
+        value={jersey}
+        onChange={(e) => setJersey(e.target.value)}
+        placeholder="23"
+        className="w-20"
+        disabled={isLoading}
+      />
+      <Input
+        label="Position"
+        value={position}
+        onChange={(e) => setPosition(e.target.value)}
+        placeholder="PG"
+        className="w-20"
+        disabled={isLoading}
+      />
+      {error && <p className="w-full text-xs text-red-400">{error}</p>}
+      <Button type="submit" isLoading={isLoading}>Save</Button>
+      <Button variant="secondary" type="button" onClick={onDone}>Cancel</Button>
+    </form>
+  )
+}
+
 // ─── Member Row ───────────────────────────────────────────────────────────────
 
 function MemberRow({
@@ -160,6 +234,7 @@ function MemberRow({
   const isPlaceholder = user === null
   const displayName = isPlaceholder ? (member.name ?? 'Unnamed') : user.name
   const [showInvite, setShowInvite] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
 
   return (
     <div className="border-b border-secondary/10 py-3 last:border-0">
@@ -186,7 +261,18 @@ function MemberRow({
             <span className="text-xs text-foreground/40">{member.position}</span>
           )}
           <RoleBadge role={member.role} />
-          {isCoach && isPlaceholder && !showInvite && (
+          {isCoach && (
+            <button
+              onClick={() => { setShowEdit((v) => !v); setShowInvite(false) }}
+              className="rounded p-1 text-foreground/30 hover:bg-secondary/10 hover:text-foreground/60"
+              aria-label={`Edit ${displayName}`}
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l-4 1 1-4L15.232 5.232a2 2 0 012.828 0l.708.708a2 2 0 010 2.828L9 13z" />
+              </svg>
+            </button>
+          )}
+          {isCoach && isPlaceholder && !showInvite && !showEdit && (
             <button
               onClick={() => setShowInvite(true)}
               className="rounded px-2 py-1 text-xs text-accent border border-secondary/30 hover:bg-secondary/10"
@@ -207,6 +293,11 @@ function MemberRow({
           )}
         </div>
       </div>
+      {showEdit && (
+        <div className="mt-2 pl-13">
+          <EditMemberForm teamID={teamID} mwu={mwu} onDone={() => setShowEdit(false)} />
+        </div>
+      )}
       {showInvite && (
         <div className="mt-2 pl-13">
           <SlotInviteForm teamID={teamID} memberID={member.id} onDone={() => setShowInvite(false)} />
@@ -647,11 +738,11 @@ export default function TeamDetailPage() {
     }
   }
 
-  async function handleRemoveMember(userID: string, displayName: string) {
+  async function handleRemoveMember(memberID: string, displayName: string) {
     if (!teamID || !window.confirm(`Remove ${displayName} from this team?`)) return
     setRemoveError(null)
     try {
-      await removeMember(teamID, userID)
+      await removeMember(teamID, memberID)
     } catch (err) {
       setRemoveError(err instanceof ApiError ? err.message : 'Failed to remove member.')
     }
@@ -753,9 +844,8 @@ export default function TeamDetailPage() {
                         isCoach={isCoach}
                         isCurrentUser={mwu.user?.id === user?.id}
                         onRemove={() => {
-                          const id = mwu.user?.id
                           const name = mwu.user?.name ?? mwu.member.name ?? 'player'
-                          if (id) void handleRemoveMember(id, name)
+                          void handleRemoveMember(mwu.member.id, name)
                         }}
                       />
                     ))
