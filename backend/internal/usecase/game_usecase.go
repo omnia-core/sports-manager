@@ -41,11 +41,7 @@ func (u *gameUsecase) CreateGame(ctx context.Context, req domains.CreateGameRequ
 
 	seedReq := domains.SeedGamePlayersRequest{GameID: res.Game.ID}
 	for _, mwu := range membersRes.Members {
-		// Skip placeholder slots — only seed members with a linked user account.
-		if mwu.Member.UserID == nil {
-			continue
-		}
-		seedReq.UserIDs = append(seedReq.UserIDs, *mwu.Member.UserID)
+		seedReq.MemberIDs = append(seedReq.MemberIDs, mwu.Member.ID)
 	}
 	if _, err := u.repo.SeedGamePlayers(ctx, seedReq); err != nil {
 		return domains.CreateGameResponse{}, fmt.Errorf("seed game players: %w", err)
@@ -85,11 +81,9 @@ func (u *gameUsecase) GetGameDetail(ctx context.Context, req domains.GetGameDeta
 	}
 	seedReq := domains.SeedGamePlayersRequest{GameID: req.GameID}
 	for _, mwu := range membersRes.Members {
-		if mwu.Member.UserID != nil {
-			seedReq.UserIDs = append(seedReq.UserIDs, *mwu.Member.UserID)
-		}
+		seedReq.MemberIDs = append(seedReq.MemberIDs, mwu.Member.ID)
 	}
-	if len(seedReq.UserIDs) > 0 {
+	if len(seedReq.MemberIDs) > 0 {
 		if _, err := u.repo.SeedGamePlayers(ctx, seedReq); err != nil {
 			return domains.GetGameDetailResponse{}, fmt.Errorf("reseed game players: %w", err)
 		}

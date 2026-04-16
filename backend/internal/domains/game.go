@@ -45,7 +45,7 @@ type GameRepository interface {
 // GameDetailPlayer is the combined view of a player's participation in a game,
 // used in the GET /api/games/:gameID response.
 type GameDetailPlayer struct {
-	UserID       uuid.UUID         `json:"user_id"`
+	MemberID     uuid.UUID         `json:"member_id"`
 	Name         string            `json:"name"`
 	JerseyNumber *int              `json:"jersey_number"`
 	Position     *string           `json:"position"`
@@ -69,8 +69,8 @@ type CreateGameResponse struct {
 }
 
 type SeedGamePlayersRequest struct {
-	GameID  uuid.UUID
-	UserIDs []uuid.UUID
+	GameID    uuid.UUID
+	MemberIDs []uuid.UUID
 }
 
 type SeedGamePlayersResponse struct{}
@@ -125,7 +125,7 @@ type DeleteGameResponse struct{}
 
 type UpsertStatsRequest struct {
 	GameID    uuid.UUID
-	UserID    uuid.UUID
+	MemberID  uuid.UUID
 	CallerID  uuid.UUID
 	Mins      int
 	Pts       int
@@ -151,7 +151,7 @@ type UpsertStatsResponse struct {
 
 type ToggleDNPRequest struct {
 	GameID   uuid.UUID
-	UserID   uuid.UUID
+	MemberID uuid.UUID
 	CallerID uuid.UUID
 }
 

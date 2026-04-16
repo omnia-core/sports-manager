@@ -62,30 +62,30 @@ export const useGameStore = create<GameState>((set) => ({
     }))
   },
 
-  async upsertStats(gameID: string, userID: string, stats: GameStats) {
-    const updated = await gamesApi.upsertStats(gameID, userID, stats)
+  async upsertStats(gameID: string, memberID: string, stats: GameStats) {
+    const updated = await gamesApi.upsertStats(gameID, memberID, stats)
     set((s) => {
       if (!s.currentGame) return {}
       return {
         currentGame: {
           ...s.currentGame,
           players: s.currentGame.players.map((p: GamePlayer) =>
-            p.user_id === userID ? { ...p, stats: updated } : p,
+            p.member_id === memberID ? { ...p, stats: updated } : p,
           ),
         },
       }
     })
   },
 
-  async toggleDNP(gameID: string, userID: string) {
-    const { is_dnp } = await gamesApi.toggleDNP(gameID, userID)
+  async toggleDNP(gameID: string, memberID: string) {
+    const { is_dnp } = await gamesApi.toggleDNP(gameID, memberID)
     set((s) => {
       if (!s.currentGame) return {}
       return {
         currentGame: {
           ...s.currentGame,
           players: s.currentGame.players.map((p: GamePlayer) =>
-            p.user_id === userID ? { ...p, is_dnp, stats: is_dnp ? null : p.stats } : p,
+            p.member_id === memberID ? { ...p, is_dnp, stats: is_dnp ? null : p.stats } : p,
           ),
         },
       }

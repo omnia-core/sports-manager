@@ -35,10 +35,15 @@ func (r *gameRepository) CreateGame(ctx context.Context, req domains.CreateGameR
 }
 
 func (r *gameRepository) SeedGamePlayers(ctx context.Context, req domains.SeedGamePlayersRequest) (domains.SeedGamePlayersResponse, error) {
-	const q = `INSERT INTO game_players (game_id, user_id) VALUES ($1, $2) ON CONFLICT (game_id, user_id) DO NOTHING`
-	for _, uid := range req.UserIDs {
-		if _, err := r.db.ExecContext(ctx, q, req.GameID, uid); err != nil {
-			return domains.SeedGamePlayersResponse{}, fmt.Errorf("seed game player %s: %w", uid, err)
+	const q = `
+		INSERT INTO game_players (game_id, team_member_id, user_id)
+		SELECT $1, tm.id, tm.user_id
+		FROM team_members tm
+		WHERE tm.id = $2
+		ON CONFLICT (game_id, team_member_id) DO NOTHING`
+	for _, mid := range req.MemberIDs {
+		if _, err := r.db.ExecContext(ctx, q, req.GameID, mid); err != nil {
+			return domains.SeedGamePlayersResponse{}, fmt.Errorf("seed game player %s: %w", mid, err)
 		}
 	}
 	return domains.SeedGamePlayersResponse{}, nil
@@ -95,12 +100,13 @@ func (r *gameRepository) GetGameDetail(ctx context.Context, req domains.GetGameD
 		return domains.GetGameDetailResponse{}, err
 	}
 
-	// Fetch players + stats via JOIN
+	// Fetch players + stats via JOIN. Name comes from the user account when available,
+	// otherwise from the team_members placeholder name.
 	const q = `
 		SELECT
-			gp.user_id,
+			gp.team_member_id,
 			gp.is_dnp,
-			u.name,
+			COALESCE(u.name, tm.name, '') AS name,
 			tm.jersey_number,
 			tm.position,
 			gs.id,
@@ -111,13 +117,13 @@ func (r *gameRepository) GetGameDetail(ctx context.Context, req domains.GetGameD
 			gs.orb, gs.drb,
 			gs.ast, gs.stl, gs.blk, gs.tov, gs.pf, gs.plus_minus
 		FROM game_players gp
-		JOIN users u ON u.id = gp.user_id
-		LEFT JOIN team_members tm ON tm.team_id = $2 AND tm.user_id = gp.user_id
+		JOIN team_members tm ON tm.id = gp.team_member_id
+		LEFT JOIN users u ON u.id = tm.user_id
 		LEFT JOIN game_stats gs ON gs.game_player_id = gp.id
 		WHERE gp.game_id = $1
 		ORDER BY gp.created_at ASC`
 
-	rows, err := r.db.QueryContext(ctx, q, req.GameID, gameRes.Game.TeamID)
+	rows, err := r.db.QueryContext(ctx, q, req.GameID)
 	if err != nil {
 		return domains.GetGameDetailResponse{}, fmt.Errorf("get game detail: %w", err)
 	}
@@ -129,7 +135,7 @@ func (r *gameRepository) GetGameDetail(ctx context.Context, req domains.GetGameD
 		var statsID, statsGamePlayerID *uuid.UUID
 		var mins, pts, fgm, fga, threePM, threePA, ftm, fta, orb, drb, ast, stl, blk, tov, pf, plusMinus *int
 		if err := rows.Scan(
-			&p.UserID, &p.IsDNP, &p.Name, &p.JerseyNumber, &p.Position,
+			&p.MemberID, &p.IsDNP, &p.Name, &p.JerseyNumber, &p.Position,
 			&statsID, &statsGamePlayerID,
 			&mins, &pts, &fgm, &fga, &threePM, &threePA,
 			&ftm, &fta, &orb, &drb, &ast, &stl, &blk, &tov, &pf, &plusMinus,
@@ -198,7 +204,7 @@ func (r *gameRepository) UpsertStats(ctx context.Context, req domains.UpsertStat
 		INSERT INTO game_stats (game_player_id, mins, pts, fgm, fga, three_pm, three_pa, ftm, fta, orb, drb, ast, stl, blk, tov, pf, plus_minus)
 		SELECT gp.id, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 		FROM game_players gp
-		WHERE gp.game_id = $1 AND gp.user_id = $2
+		WHERE gp.game_id = $1 AND gp.team_member_id = $2
 		ON CONFLICT (game_player_id) DO UPDATE SET
 			mins = EXCLUDED.mins, pts = EXCLUDED.pts,
 			fgm = EXCLUDED.fgm, fga = EXCLUDED.fga,
@@ -212,7 +218,7 @@ func (r *gameRepository) UpsertStats(ctx context.Context, req domains.UpsertStat
 
 	s := &models.GameStats{}
 	err := r.db.QueryRowContext(ctx, q,
-		req.GameID, req.UserID,
+		req.GameID, req.MemberID,
 		req.Mins, req.Pts, req.FGM, req.FGA,
 		req.ThreePM, req.ThreePA,
 		req.FTM, req.FTA,
@@ -237,8 +243,8 @@ func (r *gameRepository) UpsertStats(ctx context.Context, req domains.UpsertStat
 func (r *gameRepository) ToggleDNP(ctx context.Context, req domains.ToggleDNPRequest) (domains.ToggleDNPResponse, error) {
 	var isDNP bool
 	err := r.db.QueryRowContext(ctx,
-		`UPDATE game_players SET is_dnp = NOT is_dnp WHERE game_id = $1 AND user_id = $2 RETURNING is_dnp`,
-		req.GameID, req.UserID,
+		`UPDATE game_players SET is_dnp = NOT is_dnp WHERE game_id = $1 AND team_member_id = $2 RETURNING is_dnp`,
+		req.GameID, req.MemberID,
 	).Scan(&isDNP)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domains.ToggleDNPResponse{}, ErrNotFound
