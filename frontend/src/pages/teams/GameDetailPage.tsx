@@ -19,15 +19,32 @@ function emptyStats(): GameStats {
 
 // ── Box Score Table ───────────────────────────────────────────────────────────
 
-const STAT_COLS: Array<{ key: keyof GameStats; label: string }> = [
-  { key: 'mins', label: 'MINS' }, { key: 'pts', label: 'PTS' },
-  { key: 'fgm', label: 'FGM' }, { key: 'fga', label: 'FGA' },
-  { key: 'three_pm', label: '3PM' }, { key: 'three_pa', label: '3PA' },
-  { key: 'ftm', label: 'FTM' }, { key: 'fta', label: 'FTA' },
-  { key: 'orb', label: 'ORB' }, { key: 'drb', label: 'DRB' },
-  { key: 'ast', label: 'AST' }, { key: 'stl', label: 'STL' },
-  { key: 'blk', label: 'BLK' }, { key: 'tov', label: 'TOV' },
-  { key: 'pf', label: 'PF' }, { key: 'plus_minus', label: '+/-' },
+// Columns with computed stats interleaved where they belong.
+type ColDef =
+  | { kind: 'raw'; key: keyof GameStats; label: string }
+  | { kind: 'computed'; label: string; render: (s: GameStats) => string | number }
+
+const STAT_COLS: ColDef[] = [
+  { kind: 'raw', key: 'mins', label: 'MIN' },
+  { kind: 'raw', key: 'pts', label: 'PTS' },
+  { kind: 'raw', key: 'fgm', label: 'FGM' },
+  { kind: 'raw', key: 'fga', label: 'FGA' },
+  { kind: 'computed', label: 'FG%', render: (s) => pct(s.fgm, s.fga) },
+  { kind: 'raw', key: 'three_pm', label: '3PM' },
+  { kind: 'raw', key: 'three_pa', label: '3PA' },
+  { kind: 'computed', label: '3P%', render: (s) => pct(s.three_pm, s.three_pa) },
+  { kind: 'raw', key: 'ftm', label: 'FTM' },
+  { kind: 'raw', key: 'fta', label: 'FTA' },
+  { kind: 'computed', label: 'FT%', render: (s) => pct(s.ftm, s.fta) },
+  { kind: 'raw', key: 'orb', label: 'ORB' },
+  { kind: 'raw', key: 'drb', label: 'DRB' },
+  { kind: 'computed', label: 'REB', render: (s) => s.orb + s.drb },
+  { kind: 'raw', key: 'ast', label: 'AST' },
+  { kind: 'raw', key: 'stl', label: 'STL' },
+  { kind: 'raw', key: 'blk', label: 'BLK' },
+  { kind: 'raw', key: 'tov', label: 'TOV' },
+  { kind: 'raw', key: 'pf', label: 'PF' },
+  { kind: 'raw', key: 'plus_minus', label: '+/-' },
 ]
 
 function StatCell({
@@ -74,12 +91,12 @@ function BoxScoreTable({
 }: {
   players: GamePlayer[]
   canEdit: boolean
-  onSaveStats: (userID: string, stats: GameStats) => Promise<void>
-  onToggleDNP: (userID: string) => Promise<void>
+  onSaveStats: (memberID: string, stats: GameStats) => Promise<void>
+  onToggleDNP: (memberID: string) => Promise<void>
 }) {
   function handleStatChange(player: GamePlayer, key: keyof GameStats, val: number) {
     const current = player.stats ?? emptyStats()
-    void onSaveStats(player.user_id, { ...current, [key]: val })
+    void onSaveStats(player.member_id, { ...current, [key]: val })
   }
 
   const active = players.filter((p) => !p.is_dnp)
@@ -91,20 +108,16 @@ function BoxScoreTable({
         <thead>
           <tr className="border-b border-secondary/20 bg-primary">
             <th className="sticky left-0 z-10 bg-primary px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[120px]">Player</th>
-            {STAT_COLS.map((c) => (
-              <th key={c.key} className="px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[38px]">{c.label}</th>
+            {STAT_COLS.map((c, i) => (
+              <th key={i} className={`px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide min-w-[38px] ${c.kind === 'computed' ? 'text-foreground/30' : 'text-foreground/50'}`}>{c.label}</th>
             ))}
-            <th className="px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[38px]">REB</th>
-            <th className="px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[38px]">FG%</th>
-            <th className="px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[38px]">3P%</th>
-            <th className="px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[38px]">FT%</th>
           </tr>
         </thead>
         <tbody>
           {active.map((player) => {
             const s = player.stats ?? emptyStats()
             return (
-              <tr key={player.user_id} className="border-b border-secondary/10 hover:bg-white/5">
+              <tr key={player.member_id} className="border-b border-secondary/10 hover:bg-white/5">
                 <td className="sticky left-0 z-10 bg-background px-3 py-2 min-w-[120px]">
                   <div className="flex items-center gap-1.5">
                     {player.jersey_number !== null && (
@@ -113,25 +126,25 @@ function BoxScoreTable({
                     <span className="text-xs font-medium text-foreground">{player.name}</span>
                     {canEdit && (
                       <button
-                        onClick={() => void onToggleDNP(player.user_id)}
+                        onClick={() => void onToggleDNP(player.member_id)}
                         className="text-xs text-foreground/30 hover:text-foreground/60"
                         title="Mark as DNP"
                       >DNP</button>
                     )}
                   </div>
                 </td>
-                {STAT_COLS.map((c) => (
-                  <StatCell
-                    key={c.key}
-                    value={s[c.key]}
-                    canEdit={canEdit}
-                    onChange={(v) => handleStatChange(player, c.key, v)}
-                  />
-                ))}
-                <td className="px-0.5 py-1 text-center text-xs text-accent min-w-[38px]">{s.orb + s.drb}</td>
-                <td className="px-0.5 py-1 text-center text-xs text-foreground/50 min-w-[38px]">{pct(s.fgm, s.fga)}</td>
-                <td className="px-0.5 py-1 text-center text-xs text-foreground/50 min-w-[38px]">{pct(s.three_pm, s.three_pa)}</td>
-                <td className="px-0.5 py-1 text-center text-xs text-foreground/50 min-w-[38px]">{pct(s.ftm, s.fta)}</td>
+                {STAT_COLS.map((c, i) =>
+                  c.kind === 'raw' ? (
+                    <StatCell
+                      key={i}
+                      value={s[c.key]}
+                      canEdit={canEdit}
+                      onChange={(v) => handleStatChange(player, c.key, v)}
+                    />
+                  ) : (
+                    <td key={i} className="px-0.5 py-1 text-center text-xs text-foreground/40 min-w-[38px]">{c.render(s)}</td>
+                  )
+                )}
               </tr>
             )
           })}
@@ -143,12 +156,12 @@ function BoxScoreTable({
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-foreground/30">DNP</p>
           <div className="flex flex-wrap gap-3">
             {dnp.map((p) => (
-              <div key={p.user_id} className="flex items-center gap-1 text-sm text-foreground/40">
+              <div key={p.member_id} className="flex items-center gap-1 text-sm text-foreground/40">
                 {p.jersey_number !== null && <span className="text-xs">#{p.jersey_number}</span>}
                 <span>{p.name}</span>
                 {canEdit && (
                   <button
-                    onClick={() => void onToggleDNP(p.user_id)}
+                    onClick={() => void onToggleDNP(p.member_id)}
                     className="ml-1 text-xs text-secondary hover:underline"
                   >
                     Mark active
@@ -254,14 +267,14 @@ function LiveMode({
   onToggleDNP,
 }: {
   players: GamePlayer[]
-  onAction: (userID: string, action: LivePanelStat) => void
-  onToggleDNP: (userID: string) => Promise<void>
+  onAction: (memberID: string, action: LivePanelStat) => void
+  onToggleDNP: (memberID: string) => Promise<void>
 }) {
   const [activePlayerID, setActivePlayerID] = useState<string | null>(null)
   const active = players.filter((p) => !p.is_dnp)
   const dnp = players.filter((p) => p.is_dnp)
   // Derive from props so the panel always shows the latest stats from the store
-  const activePlayer = activePlayerID ? (players.find((p) => p.user_id === activePlayerID) ?? null) : null
+  const activePlayer = activePlayerID ? (players.find((p) => p.member_id === activePlayerID) ?? null) : null
 
   return (
     <div>
@@ -270,8 +283,8 @@ function LiveMode({
           const s = player.stats ?? emptyStats()
           return (
             <button
-              key={player.user_id}
-              onClick={() => setActivePlayerID(player.user_id)}
+              key={player.member_id}
+              onClick={() => setActivePlayerID(player.member_id)}
               className="flex flex-col gap-1 rounded-xl border border-secondary/20 bg-primary p-4 text-left transition-colors hover:border-secondary/40"
             >
               <div className="flex items-center gap-2">
@@ -296,8 +309,8 @@ function LiveMode({
           <div className="flex flex-wrap gap-2">
             {dnp.map((p) => (
               <button
-                key={p.user_id}
-                onClick={() => void onToggleDNP(p.user_id)}
+                key={p.member_id}
+                onClick={() => void onToggleDNP(p.member_id)}
                 className="rounded-lg border border-secondary/10 bg-primary px-3 py-2 text-xs text-foreground/40 hover:border-secondary/30 hover:text-foreground/60"
               >
                 {p.name} — tap to activate
@@ -311,7 +324,7 @@ function LiveMode({
         <LivePanel
           player={activePlayer}
           onAction={(action) => {
-            onAction(activePlayer.user_id, action)
+            onAction(activePlayer.member_id, action)
           }}
           onClose={() => setActivePlayerID(null)}
         />
@@ -336,22 +349,22 @@ export default function GameDetailPage() {
 
   const isCoach = !!(currentTeam && user && currentTeam.coach_id === user.id)
 
-  const handleSaveStats = useCallback(async (userID: string, stats: GameStats) => {
+  const handleSaveStats = useCallback(async (memberID: string, stats: GameStats) => {
     if (!gameID) return
-    await upsertStats(gameID, userID, stats)
+    await upsertStats(gameID, memberID, stats)
   }, [gameID, upsertStats])
 
-  const handleToggleDNP = useCallback(async (userID: string) => {
+  const handleToggleDNP = useCallback(async (memberID: string) => {
     if (!gameID) return
-    await toggleDNP(gameID, userID)
+    await toggleDNP(gameID, memberID)
   }, [gameID, toggleDNP])
 
-  const handleLiveAction = useCallback(async (userID: string, action: LivePanelStat) => {
+  const handleLiveAction = useCallback(async (memberID: string, action: LivePanelStat) => {
     if (!gameID || !currentGame) return
-    const player = currentGame.players.find((p) => p.user_id === userID)
+    const player = currentGame.players.find((p) => p.member_id === memberID)
     if (!player) return
     const updated = applyLiveStat(player.stats ?? emptyStats(), action)
-    await upsertStats(gameID, userID, updated)
+    await upsertStats(gameID, memberID, updated)
   }, [gameID, currentGame, upsertStats])
 
   if (isLoading || !currentGame) {

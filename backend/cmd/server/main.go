@@ -139,8 +139,8 @@ func main() {
 		r.Get("/{gameID}", gameHandler.GetGameDetail)
 		r.Put("/{gameID}", gameHandler.UpdateGame)
 		r.Delete("/{gameID}", gameHandler.DeleteGame)
-		r.Put("/{gameID}/stats/{userID}", gameHandler.UpsertStats)
-		r.Patch("/{gameID}/players/{userID}", gameHandler.ToggleDNP)
+		r.Put("/{gameID}/stats/{memberID}", gameHandler.UpsertStats)
+		r.Patch("/{gameID}/players/{memberID}", gameHandler.ToggleDNP)
 	})
 
 	// Play routes

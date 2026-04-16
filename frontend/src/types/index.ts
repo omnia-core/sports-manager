@@ -113,7 +113,7 @@ export interface GameStats {
 }
 
 export interface GamePlayer {
-  user_id: string
+  member_id: string
   name: string
   jersey_number: number | null
   position: string | null

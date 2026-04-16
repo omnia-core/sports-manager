@@ -25,11 +25,11 @@ export const gamesApi = {
     return del<void>(`/api/games/${gameID}`)
   },
 
-  upsertStats(gameID: string, userID: string, stats: GameStats): Promise<GameStats> {
-    return put<GameStats>(`/api/games/${gameID}/stats/${userID}`, stats)
+  upsertStats(gameID: string, memberID: string, stats: GameStats): Promise<GameStats> {
+    return put<GameStats>(`/api/games/${gameID}/stats/${memberID}`, stats)
   },
 
-  toggleDNP(gameID: string, userID: string): Promise<{ is_dnp: boolean }> {
-    return patch<{ is_dnp: boolean }>(`/api/games/${gameID}/players/${userID}`)
+  toggleDNP(gameID: string, memberID: string): Promise<{ is_dnp: boolean }> {
+    return patch<{ is_dnp: boolean }>(`/api/games/${gameID}/players/${memberID}`)
   },
 }

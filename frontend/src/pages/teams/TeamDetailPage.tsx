@@ -684,7 +684,12 @@ function GamesTab({ teamID, isCoach }: { teamID: string; isCoach: boolean }) {
                   <span className={`text-sm font-bold ${resultColor}`}>{result}</span>
                   {isCoach && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); void deleteGame(g.id) }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (window.confirm(`Delete game vs ${g.opponent_name}? This cannot be undone.`)) {
+                          void deleteGame(g.id)
+                        }
+                      }}
                       className="rounded p-1 text-foreground/30 hover:bg-red-900/30 hover:text-red-400"
                       aria-label="Delete game"
                     >

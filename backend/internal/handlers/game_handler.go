@@ -194,9 +194,9 @@ func (h *GameHandler) UpsertStats(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid game ID"))
 		return
 	}
-	userID, err := parseUUIDParam(r, "userID")
+	memberID, err := parseUUIDParam(r, "memberID")
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errBody("invalid user ID"))
+		writeJSON(w, http.StatusBadRequest, errBody("invalid member ID"))
 		return
 	}
 	var body upsertStatsBody
@@ -205,7 +205,7 @@ func (h *GameHandler) UpsertStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := h.usecase.UpsertStats(r.Context(), domains.UpsertStatsRequest{
-		GameID: gameID, UserID: userID, CallerID: caller.ID,
+		GameID: gameID, MemberID: memberID, CallerID: caller.ID,
 		Mins: body.Mins, Pts: body.Pts, FGM: body.FGM, FGA: body.FGA,
 		ThreePM: body.ThreePM, ThreePA: body.ThreePA,
 		FTM: body.FTM, FTA: body.FTA, ORB: body.ORB, DRB: body.DRB,
@@ -231,12 +231,12 @@ func (h *GameHandler) ToggleDNP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid game ID"))
 		return
 	}
-	userID, err := parseUUIDParam(r, "userID")
+	memberID, err := parseUUIDParam(r, "memberID")
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errBody("invalid user ID"))
+		writeJSON(w, http.StatusBadRequest, errBody("invalid member ID"))
 		return
 	}
-	res, err := h.usecase.ToggleDNP(r.Context(), domains.ToggleDNPRequest{GameID: gameID, UserID: userID, CallerID: caller.ID})
+	res, err := h.usecase.ToggleDNP(r.Context(), domains.ToggleDNPRequest{GameID: gameID, MemberID: memberID, CallerID: caller.ID})
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
