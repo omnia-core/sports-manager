@@ -77,10 +77,10 @@ export const useTeamStore = create<TeamState>((set) => ({
     await teamsApi.inviteMember(teamID, email, memberID)
   },
 
-  async removeMember(teamID: string, userID: string) {
-    await teamsApi.removeMember(teamID, userID)
+  async removeMember(teamID: string, memberID: string) {
+    await teamsApi.removeMember(teamID, memberID)
     set((state) => ({
-      members: state.members.filter((m) => m.user?.id !== userID),
+      members: state.members.filter((m) => m.member.id !== memberID),
     }))
   },
 

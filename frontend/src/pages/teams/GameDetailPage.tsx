@@ -46,11 +46,11 @@ function StatCell({
   }, [value])
 
   if (!canEdit) {
-    return <td className="px-2 py-1 text-center text-sm text-foreground/70">{value}</td>
+    return <td className="px-0.5 py-1 text-center text-xs text-foreground/70 min-w-[38px]">{value}</td>
   }
 
   return (
-    <td className="px-1 py-1">
+    <td className="px-0.5 py-1 min-w-[38px]">
       <input
         type="number"
         value={local}
@@ -60,7 +60,7 @@ function StatCell({
           if (!isNaN(n) && n !== value) onChange(n)
           else setLocal(String(value))
         }}
-        className="w-14 rounded border border-secondary/20 bg-background px-1 py-0.5 text-center text-sm text-foreground focus:border-secondary focus:outline-none"
+        className="w-9 rounded border border-secondary/20 bg-background px-0.5 py-0.5 text-center text-xs text-foreground focus:border-secondary focus:outline-none"
       />
     </td>
   )
@@ -87,17 +87,17 @@ function BoxScoreTable({
 
   return (
     <div className="overflow-x-auto rounded-lg border border-secondary/20">
-      <table className="min-w-full text-sm">
+      <table className="min-w-full">
         <thead>
           <tr className="border-b border-secondary/20 bg-primary">
-            <th className="sticky left-0 z-10 bg-primary px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[140px]">Player</th>
+            <th className="sticky left-0 z-10 bg-primary px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[120px]">Player</th>
             {STAT_COLS.map((c) => (
-              <th key={c.key} className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[56px]">{c.label}</th>
+              <th key={c.key} className="px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[38px]">{c.label}</th>
             ))}
-            <th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[48px]">REB</th>
-            <th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[56px]">FG%</th>
-            <th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[56px]">3P%</th>
-            <th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[56px]">FT%</th>
+            <th className="px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[38px]">REB</th>
+            <th className="px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[38px]">FG%</th>
+            <th className="px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[38px]">3P%</th>
+            <th className="px-0.5 py-2 text-center text-xs font-semibold uppercase tracking-wide text-foreground/50 min-w-[38px]">FT%</th>
           </tr>
         </thead>
         <tbody>
@@ -105,16 +105,16 @@ function BoxScoreTable({
             const s = player.stats ?? emptyStats()
             return (
               <tr key={player.user_id} className="border-b border-secondary/10 hover:bg-white/5">
-                <td className="sticky left-0 z-10 bg-background px-3 py-2 min-w-[140px]">
-                  <div className="flex items-center gap-2">
+                <td className="sticky left-0 z-10 bg-background px-3 py-2 min-w-[120px]">
+                  <div className="flex items-center gap-1.5">
                     {player.jersey_number !== null && (
                       <span className="text-xs text-foreground/40">#{player.jersey_number}</span>
                     )}
-                    <span className="font-medium text-foreground">{player.name}</span>
+                    <span className="text-xs font-medium text-foreground">{player.name}</span>
                     {canEdit && (
                       <button
                         onClick={() => void onToggleDNP(player.user_id)}
-                        className="ml-1 text-xs text-foreground/30 hover:text-foreground/60"
+                        className="text-xs text-foreground/30 hover:text-foreground/60"
                         title="Mark as DNP"
                       >DNP</button>
                     )}
@@ -128,10 +128,10 @@ function BoxScoreTable({
                     onChange={(v) => handleStatChange(player, c.key, v)}
                   />
                 ))}
-                <td className="px-2 py-1 text-center text-sm text-accent">{s.orb + s.drb}</td>
-                <td className="px-2 py-1 text-center text-sm text-foreground/50">{pct(s.fgm, s.fga)}</td>
-                <td className="px-2 py-1 text-center text-sm text-foreground/50">{pct(s.three_pm, s.three_pa)}</td>
-                <td className="px-2 py-1 text-center text-sm text-foreground/50">{pct(s.ftm, s.fta)}</td>
+                <td className="px-0.5 py-1 text-center text-xs text-accent min-w-[38px]">{s.orb + s.drb}</td>
+                <td className="px-0.5 py-1 text-center text-xs text-foreground/50 min-w-[38px]">{pct(s.fgm, s.fga)}</td>
+                <td className="px-0.5 py-1 text-center text-xs text-foreground/50 min-w-[38px]">{pct(s.three_pm, s.three_pa)}</td>
+                <td className="px-0.5 py-1 text-center text-xs text-foreground/50 min-w-[38px]">{pct(s.ftm, s.fta)}</td>
               </tr>
             )
           })}

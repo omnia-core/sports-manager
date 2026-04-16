@@ -133,7 +133,7 @@ type ListMembersResponse struct {
 
 type RemoveMemberRequest struct {
 	TeamID   uuid.UUID
-	UserID   uuid.UUID
+	MemberID uuid.UUID
 	CallerID uuid.UUID
 }
 
