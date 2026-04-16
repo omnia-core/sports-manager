@@ -11,9 +11,8 @@ CREATE UNIQUE INDEX team_members_team_user_unique
     ON team_members (team_id, user_id)
     WHERE user_id IS NOT NULL;
 
--- Drop the old NOT NULL unique constraint if it exists as a separate index
--- (the original migration used a UNIQUE constraint inline; this drops the implicit index)
-DROP INDEX IF EXISTS team_members_team_id_user_id_key;
+-- Drop the old UNIQUE constraint (created inline in the original migration)
+ALTER TABLE team_members DROP CONSTRAINT IF EXISTS team_members_team_id_user_id_key;
 
 -- Link invites to a specific roster slot (optional)
 ALTER TABLE team_invites
