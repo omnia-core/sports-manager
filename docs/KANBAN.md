@@ -303,3 +303,70 @@ It does not address who else can enter data, or who ever reads it.
 | `UpdateGame` | COALESCE blocks null | N | N | Cannot clear score | N | |
 
 7 failure modes, 6 CRITICAL GAPS.
+
+---
+
+## DESIGN REVIEW (Phase 2)
+
+Codex unavailable. Outside voice: Claude subagent `[subagent-only]`.
+Design completeness: **4/10 -> 7/10** with the fixes below.
+
+### Pass scores
+
+| Pass | Score | Finding |
+|---|---|---|
+| 1. Information architecture | 5/10 | Hierarchy specified for one screen only. SM-7 and SM-8 each create a new screen with none. SM-1 puts a sync bar at position zero on the most time-critical screen in the product |
+| 2. Interaction states | 3/10 | SM-1 covers all five. The other seven cards cover none. SM-7's empty state IS the feature for a new coach; SM-8 is an empty-state card with no copy |
+| 3. User journey | 6/10 | Pain written in the coach's voice, but the arc is friction -> reliability -> forced logout -> no payoff |
+| 4. AI slop | 7/10 | APP UI. Live grid is cards-as-layout but passes: the card IS the tap target. `window.prompt` is absence of design, not slop |
+| 5. Design system | 6/10 | Palette has no warning/danger token, so SM-1 had to invent amber and red. `Badge` already ships `red`/`yellow` (CLAUDE.md is stale) - promote to tokens once |
+| 6. Responsive & a11y | 5/10 | SM-1 strong. 48 uses of sub-4.5:1 `text-foreground/20\|30\|40` across the frontend; box-score stat inputs are 36px targets on the primary correction surface |
+
+### CRITICAL - not on the board
+
+`AccessTokenTTL = 60 * time.Minute` (`backend/internal/auth/jwt.go:15`) and the frontend
+never calls `/api/auth/refresh`. `client.ts:22` fires `onUnauthorized` on any 401, clearing
+the session and redirecting to `/login`. A game with warm-up is 90-120 minutes, so the coach
+is forcibly logged out mid-game, losing any in-memory queue SM-1 builds.
+
+Fix: transparent refresh in `client.ts` (on 401, try `POST /api/auth/refresh` once, replay
+the request, fall through to `onUnauthorized` only if refresh fails), and SM-1's queue must
+survive an auth interruption regardless.
+
+### Spec mechanics that are factually wrong against this codebase
+
+- `Layout` has no `fixed`/`sticky`/`z-*`; its nav is in normal flow above `<main>`. A
+  viewport-fixed `z-50` strip covers the nav, and the spec's `pt-12` pads the wrong element.
+- `Modal` is `fixed inset-0 z-50`; `LivePanel` is `z-40`. The spec puts the strip at z-50
+  and the Unsaved Stats sheet in a `Modal` - same layer, resolved only by DOM order.
+  Explicit layering needed: LivePanel 40 -> strip 45 -> Modal 50.
+
+### DESIGN DUAL VOICES - LITMUS SCORECARD
+
+```
+  Dimension                          Claude    Outside   Consensus
+  ---------------------------------- --------- --------- ----------
+  1. Information hierarchy right?    NO        NO        CONFIRMED
+  2. Interaction states specified?   NO 3/10   NO        CONFIRMED
+  3. User journey coherent?          NO        NO        CONFIRMED
+  4. Specific vs generic UI?         PARTIAL   PARTIAL   CONFIRMED
+  5. Design system alignment?        PARTIAL   NO        CONFIRMED
+  6. Responsive & a11y?              PARTIAL   PARTIAL   CONFIRMED
+  7. Unresolved decisions surfaced?  6 listed  7 ranked  CONFIRMED
+```
+
+7/7 CONFIRMED, 0 reviewer disagreements. Both reviewers disagree with the SM-1 spec on
+four of its five proposed surfaces, and both independently place SM-4 ahead of SM-1.
+
+### Unresolved design decisions
+
+| Decision needed | If deferred |
+|---|---|
+| Local queue persistence: localStorage vs IndexedDB, keyed how, schema versioning | Hardest thing in SM-1, currently six words of "developer's call" |
+| Delta PATCH vs client-side collapse | SM-1's only hard behaviour requirement (N taps = N increments) does not hold without it |
+| Undo's compensating write against a last-write-wins API | Undo carries the identical lost-write hazard it exists to fix |
+| Refetch reconciliation; `fetchGameDetail` sets `currentGame: null` and blanks the screen | Screen blanks mid-game on any refetch, including the PWA autoUpdate reload |
+| Do DNP games count in SM-7's averages denominator? | A basketball correctness decision made by accident |
+| SM-2 states: is a DNP line greyed or hidden? Does un-DNP refetch? | P0 with a described fix and zero states defined |
+| SM-4: is team score computed, overridable, or both? | Schema decision, not UI; `COALESCE` blocks revert-to-computed |
+| SM-6 bulk entry: format, malformed rows, partial success, duplicate jerseys | The card is labelled a papercut and is actually a roster IA redesign |
