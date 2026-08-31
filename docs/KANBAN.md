@@ -370,3 +370,197 @@ four of its five proposed surfaces, and both independently place SM-4 ahead of S
 | SM-2 states: is a DNP line greyed or hidden? Does un-DNP refetch? | P0 with a described fix and zero states defined |
 | SM-4: is team score computed, overridable, or both? | Schema decision, not UI; `COALESCE` blocks revert-to-computed |
 | SM-6 bulk entry: format, malformed rows, partial success, duplicate jerseys | The card is labelled a papercut and is actually a roster IA redesign |
+
+---
+
+## ENG REVIEW (Phase 3)
+
+Codex unavailable. Outside voice: Claude subagent `[subagent-only]`.
+
+### Step 0 — Scope challenge
+
+Four cards, two files. SM-1, SM-2, SM-3 and SM-5 all land in `GameDetailPage.tsx` and
+`gameStore.ts`. The board records only the SM-1/SM-3 dependency.
+
+| | `GameDetailPage.tsx` | `gameStore.ts` |
+|---|---|---|
+| SM-1 | `handleLiveAction`, `handleSaveStats`, `LivePanel`, `BoxScoreTable`, header | `upsertStats` — full rewrite |
+| SM-2 | `BoxScoreTable` DNP button, `handleStatChange` | `toggleDNP` |
+| SM-3 | `isCoach` derivation + mount effect | — |
+| SM-5 | `LivePanel`, `LiveMode` | — |
+
+SM-2 and SM-1 collide in `BoxScoreTable`/`handleStatChange` and both rewrite the same
+`stats` field. The board's claim that they are independent is false.
+
+**Hidden complexity — largest cards are not the ones marked P0.** SM-7 is the only full
+backend vertical slice (domains -> usecase -> repository -> handler -> route -> client ->
+store -> a new screen with no spec) and sits at P1 next to copy-and-layout cards. SM-6 is
+labelled a papercut but absorbed the duplicate-invite-path cleanup, making it a roster IA
+redesign. SM-1 itself is roughly 3x its apparent size once the store split, durable queue,
+test infrastructure and token refresh are counted.
+
+### Section 1 — Architecture
+
+```
+                    GameDetailPage.tsx  (444 lines, 5 components)
+                   /          |          \
+            gameStore     teamStore     authStore
+                 |            |  ^
+                 |            |  +-- SM-3: populated ONLY by TeamDetailPage
+                 |            |        -> unjustified coupling; this IS the bug
+                 +-----+------+
+                  api/client.ts     credentials:include, 401 -> onUnauthorized
+                       |            NO refresh call anywhere  <-- P0
+                 game_handler.go    no logging, no input validation
+                       |
+                 game_usecase.go    requireCoach / requireMember  (SOUND)
+                       |
+              game_repository.go    UpsertStats: absolute 17-col PUT,
+                                    ON CONFLICT DO UPDATE, no version column
+```
+
+**A1 (critical) — the spec's UI and the transport are incompatible.** SM-1 asks for
+per-action retry, per-action discard and per-action undo, while also requiring the queue to
+collapse per player into one absolute line so N taps equal N increments. Once collapsed
+there is no "+2 PT for Marcus" item left to retry or cancel. The developer ends up
+maintaining a shadow action log beside the collapsed line — two sources of truth, which is
+the bug class this card exists to kill. The endpoint choice is not the developer's call;
+the spec's own UI forces it.
+
+**A2 (critical) — no separation between local truth and server truth.** `currentGame` is
+the only stat state. `fetchGameDetail` sets `currentGame: null` then overwrites wholesale,
+so any refetch (reconnect, back-navigation, PWA resume) blanks the page and discards every
+optimistic value — after which the queue recomputes absolute lines from the reverted base
+and writes the regression back to the server. The store needs `serverStats` +
+`pendingEvents[]` with the rendered line derived.
+
+**A3 (high) — writes are not serialized per player.** The browser allows 6 concurrent
+requests per origin; two writes for the same `member_id` in flight can land out of order
+and the older absolute line wins. That is the card's own bug, reintroduced inside the fix.
+
+**A4 (high) — `GET /api/games/:gameID` writes, one INSERT per member, no transaction.**
+~19 queries per game view at 15 players. A mid-loop failure leaves a partial roster and
+500s a read. Replaceable with one `INSERT ... SELECT ... ON CONFLICT DO NOTHING`.
+
+### Section 2 — Code quality
+
+- `applyLiveStat` is the one clean pure function here and the natural seam for the queue.
+  Extract it from the page before SM-1 changes it.
+- `+2 PT` and `FG ✓` both increment `fgm`/`fga`; tapping both double-counts an attempt.
+- `mins` and `plus_minus` are editable columns live mode can never populate.
+- `emptyStats()` is duplicated in spirit by the DB defaults and by the store.
+
+### Section 3 — Test review
+
+Coverage today: frontend **zero, with no test runner at all**; backend two tests, both on
+`CreateGame`; `UpsertStats`, `ToggleDNP`, `GetGameDetail`, the whole repository layer and
+all handlers untested. CI provisions a Postgres 15 container that nothing uses.
+
+Full test plan written to
+`~/.gstack/projects/omnia-core-sports-manager/kevin-feature-13-test-plan-20260901-0025.md`
+(15 tests, 9 of them P1).
+
+The merge-gating test: a pure queue-reducer unit test where the transport fails the first K
+sends, delivers the rest out of order, and duplicates one — assert final server state equals
+the exact sum of N actions, local state never decreased, and undo of action *i* removes
+exactly action *i*. Under a delta endpoint with an idempotency key this passes trivially;
+under absolute-PUT-plus-collapse it is the thing that fails.
+
+### Section 4 — Performance
+
+- A4's N+1 is the real amplifier, made worse by SM-1's reconnect refetches.
+- A tap costs 3 queries; ~200 events per game is ~600 queries. Pool is 25. Load is not the
+  pressure point.
+- `NetworkFirst` with `networkTimeoutSeconds: 5` means that on the gym wifi this card is
+  about, the page renders **from cache** — and the queue then computes absolute stat lines
+  from a possibly hours-old base and writes them to the server. Caching `/api/games/*` as
+  SM-1 requests introduces a new data-loss vector unless the write model changes.
+
+### Additional confirmed defects not on the board
+
+| # | Defect | Evidence |
+|---|---|---|
+| 1 | Access token expires at 60 min; frontend never calls `/api/auth/refresh` | `auth/jwt.go:15`; `api/auth.ts` has only register/login/logout/me |
+| 2 | Failed game load is an infinite spinner | `fetchGameDetail` uses try/finally with no catch |
+| 3 | No stat input validation | `upsertStatsBody` is 17 bare `int` fields; DB columns are plain INT |
+| 4 | Workbox caches authenticated responses keyed by URL only; no purge on logout | `authStore.logout()` clears state only — shared device leaks data between coaches |
+| 5 | `navigator.vibrate` is unimplemented on iOS Safari including installed PWAs | The spec calls the haptic its primary non-visual channel |
+
+### ENG DUAL VOICES — CONSENSUS TABLE
+
+```
+  Dimension                          Claude    Outside   Consensus
+  ---------------------------------- --------- --------- ----------
+  1. Architecture sound?             NO        NO        CONFIRMED
+  2. Test coverage sufficient?       NO        NO        CONFIRMED
+  3. Performance risks addressed?    NO        NO        CONFIRMED
+  4. Security threats covered?       PARTIAL   PARTIAL   CONFIRMED
+  5. Error paths handled?            NO        NO        CONFIRMED
+  6. Deployment risk manageable?     PARTIAL   —         N/A
+```
+
+5/6 CONFIRMED, 1 N/A, 0 disagreements.
+
+### CROSS-PHASE THEMES
+
+| Theme | Phases | Signal |
+|---|---|---|
+| Access token expires mid-game; no refresh on the client | Design + Eng, independently | **Highest-confidence finding in the review.** Two voices with no shared context reached it from different directions |
+| The absolute-value write primitive is the shared root cause of SM-1 and SM-2 | CEO + Eng | Both propose an idempotent delta/event write before the queue UI |
+| SM-1 must not be built first; SM-3 is a prerequisite | CEO + Design + Eng | All three voices, unprompted |
+| SM-4 belongs ahead of SM-1 | CEO + Design | Reliability of a loop that produces no visible result is the least valuable ordering |
+| No frontend test infrastructure exists | CEO + Eng | Both call it blocking, not follow-up |
+
+### NOT in scope (Phase 3)
+
+| Item | Rationale |
+|---|---|
+| Splitting `GameDetailPage.tsx` into modules | Do it as part of SM-1 + SM-5, not as its own card |
+| Rate limiting stat writes | Deferred; retry cap and backoff cover the realistic case |
+| Multi-device concurrent scorekeeping | Out of scope until the scorekeeper-role question is answered |
+
+## Decision Audit Trail
+
+| # | Phase | Decision | Class | Principle | Rationale |
+|---|-------|----------|-------|-----------|-----------|
+| 1 | 0 | Review target = `docs/KANBAN.md` | User | — | User selected option C at D1 |
+| 2 | 0 | Checkpoint mode -> continuous | User | — | User selected option B at D2 |
+| 3 | 0 | DX phase skipped | Mechanical | P3 | Only `API`(2)/`endpoint`(1) matched, all internal; no CLI/SDK/public API |
+| 4 | 0 | `/office-hours` offer suppressed | Mechanical | P6 | autoplan One Gate rule; PM cards already carry structured problem statements |
+| 5 | 1 | Mode = SELECTIVE EXPANSION | Mechanical | override | autoplan CEO-phase override |
+| 6 | 1 | Approach B (bundle trust fixes) recommended | **Taste** | P2/P5 | Root-cause fix once vs three passes over the same files; overrides PM sequencing so it goes to the gate |
+| 7 | 1 | Premise challenges queued, not auto-applied | Mechanical | override | Premises require human judgement at the gate |
+| 8 | 2 | All 7 design dimensions run | Mechanical | P1 | Completeness |
+| 9 | 2 | Spec surface trims (strip/undo/dots/discard) NOT auto-applied | **Taste** | P6 | Contradicts the designer's stated rationale; user decides |
+| 10 | 3 | Test plan artifact written to disk | Mechanical | P1 | Required Phase 3 output |
+| 11 | 3 | Scope never reduced | Mechanical | override | autoplan eng-phase override |
+| 12 | all | Review logging skipped | Forced | — | `gstack-review-log` requires `bun`; not installed |
+| 13 | all | Task JSONL skipped | Forced | — | `jq` not installed; skill forbids hand-rolling JSONL |
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | issues_open | 6 proposals, 0 accepted, 6 critical gaps |
+| Codex Review | `/codex review` | Independent 2nd opinion | 0 | — | codex binary not installed |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | issues_open | 14 issues, 4 critical |
+| Design Review | `/plan-design-review` | UI/UX gaps | 1 | issues_open | score 4/10 -> 7/10, 8 decisions open |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | skipped | no developer-facing scope |
+
+**CROSS-MODEL:** Codex unavailable on this machine, so all three outside voices ran as
+independent Claude subagents `[subagent-only]`. Consensus: CEO 6/6, Design 7/7, Eng 5/6
+confirmed with 0 disagreements. Two voices independently found the mid-game token expiry.
+
+**VERDICT:** CEO + DESIGN + ENG reviewed — NOT CLEARED for implementation. 4 user
+challenges and 5 taste decisions await the approval gate.
+
+**UNRESOLVED DECISIONS:**
+- UC1 — build order: all three voices reject SM-1 first; SM-3 is a prerequisite
+- UC2 — write primitive: adopt an idempotent delta/event write before the SM-1 queue UI
+- UC3 — add an unlisted P0: token refresh in `client.ts`
+- UC4 — validate the stat-keeper premise; consider a scorekeeper role
+- TD1 — bundle SM-3/SM-2/SM-1 as one change, or keep them card-by-card
+- TD2 — derive `team_score` rather than storing it
+- TD3 — trim four of the SM-1 spec's five proposed surfaces
+- TD4 — merge SM-6 with SM-8 as one first-run card
+- TD5 — promote a shareable game recap to P1
