@@ -3,7 +3,9 @@
 **Card:** SM-1 · P0 · bug · *Live stat taps are silently lost on gym wifi and on fast taps*
 **Surface:** `frontend/src/pages/teams/GameDetailPage.tsx` (`LiveMode`, `LivePanel`, `handleLiveAction`, `BoxScoreTable`), `frontend/src/stores/gameStore.ts`, `frontend/vite.config.ts`
 **Author:** UI/UX Designer · 2026-09-01
-**Status:** Ready for Dev
+**Status:** Ready for Design — revision required before build. The board moved SM-1 behind
+SM-9, SM-3, SM-2 and SM-13 on 2026-09-01 and this spec owes six revisions. Read the SM-1 row
+in [`docs/KANBAN.md`](../KANBAN.md) before building from it.
 
 ---
 

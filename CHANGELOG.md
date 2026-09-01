@@ -30,6 +30,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   problem: a coach who abandons at the empty screen never reaches the roster form.
 - Dropped the shareable game recap's dependency on season aggregates. A per-game
   recap link needs no aggregate data model.
+- `README.md` now lists the games and roster work under Features, and carries a Project
+  Docs table pointing at the board, the design specs, and the test plans. Every doc in
+  `docs/` is now reachable from the front page. The Architecture Notes section no longer
+  links to `CLAUDE.md`, which is not committed, so the link went nowhere for anyone who
+  cloned the repo; the rules it pointed at are summarised inline instead.
 
 ### Notes
 

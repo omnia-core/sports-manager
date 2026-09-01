@@ -13,7 +13,11 @@ A sports team management PWA for coaches and players. Coaches create and manage 
 
 - **Auth** — Email/password registration and login with JWT + refresh-token rotation
 - **Teams** — Coaches create, edit, and delete teams; players see teams they belong to
-- **Roster** — Invite players by email; players accept via link; coaches can remove players
+- **Roster** — Add a player by name straight to the roster, or invite them by email; invited players
+  accept via link and link up to their slot. Coaches edit jersey numbers and positions, and remove players
+- **Games** — Log a game against an opponent, then keep the book two ways: a **Box Score** table for
+  typing a full line, and **Live Track** for tapping stats one event at a time during play. 16 stat
+  columns (mins, pts, FG, 3P, FT, ORB/DRB, ast, stl, blk, tov, pf, +/-), plus a DNP toggle per player
 - **Playbooks** — Create/edit/delete playbooks per team with an interactive canvas drawing tool
   - Basketball court (halfcourt or fullcourt)
   - Draggable offense/defense player tokens
@@ -102,6 +106,21 @@ migrate -path backend/migrations -database "postgres://..." down 1
 3. Player logs in (or registers — invite token is preserved through auth pages)
 4. Invite auto-accepted → player added to the team
 
+## Project Docs
+
+| Doc | What it is |
+|---|---|
+| [docs/KANBAN.md](./docs/KANBAN.md) | The shared board. Every open card (`SM-<n>`), its priority, the pain it fixes, and why it sits where it does. Start here to see what is being built next. |
+| [docs/design/](./docs/design/) | Interaction specs, one per card. Written before the card is built. |
+| [docs/test-plans/](./docs/test-plans/) | Test plans per feature area, with the blocking tests called out. |
+| [docs/superpowers/](./docs/superpowers/) | The original plan and design spec for the games feature. |
+| [CHANGELOG.md](./CHANGELOG.md) | What shipped in each release. |
+
 ## Architecture Notes
 
-See [CLAUDE.md](./CLAUDE.md) for full architecture, layer responsibilities, naming conventions, and interface design rules used throughout the codebase.
+Layer responsibilities, naming conventions, and the interface design rules used throughout the
+backend are kept in `CLAUDE.md` at the repo root. That file is local-only and not committed, so
+the short version: `domains/` holds interfaces, `usecase/` holds business logic, `repository/`
+holds all SQL, and `handlers/` holds HTTP only. Handlers depend on usecase interfaces, usecases
+depend on repository interfaces, and sentinel errors map to HTTP status codes in one place
+(`backend/internal/handlers/errors.go`).
