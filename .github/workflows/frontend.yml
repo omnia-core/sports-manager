@@ -1,35 +1,60 @@
+# The job below ALWAYS runs and always reports the "Lint & build" context that
+# branch protection requires. Path filtering happens INSIDE the job instead of
+# in the `on:` trigger.
+#
+# Why not `paths:` — a filtered workflow simply does not run on a PR that misses
+# its paths, so the required context never reports and the PR is stuck in
+# mergeStateStatus=BLOCKED with nothing able to satisfy it. A companion
+# `paths-ignore:` workflow does not fix it either: `paths-ignore` runs whenever
+# ANY changed file falls outside the ignore list, so on a mixed PR both the real
+# and the skip workflow run and publish the same context name. GitHub resolves
+# duplicate contexts by the most recent run, which means a passing no-op could
+# mask a failing real build.
 name: Frontend CI
 
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend.yml"
 
 jobs:
   ci:
     name: Lint & build
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: frontend
-
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect frontend changes
+        id: changes
+        run: |
+          if git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD \
+             | grep -qE '^(frontend/|\.github/workflows/frontend\.yml)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No files under frontend/ changed — nothing to lint or build."
+          fi
 
       - uses: actions/setup-node@v4
+        if: steps.changes.outputs.changed == 'true'
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: frontend
         run: npm ci
 
       - name: Lint
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: frontend
         run: npm run lint
 
       - name: Build (type-check + bundle)
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: frontend
         run: npm run build
