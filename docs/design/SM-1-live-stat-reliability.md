@@ -121,7 +121,7 @@ The strip stops being a full-bleed bar and becomes an inline pill in the header 
 
 ```
 ┌──────────────────────────────── 1280 ─────────────────────────────────────┐
-│ NAV  Sports Manager                              Kevin Hwang   [ Logout ] │
+│ NAV  Sports Manager                              Coach         [ Logout ] │
 ├───────────────────────────────────────────────────────────────────────────┤
 │ HEADER                                                                    │
 │  ← Back                                                                   │
