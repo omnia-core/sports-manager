@@ -24,7 +24,7 @@ function InlineLoginForm({ onSuccess }: { onSuccess: () => void }) {
     setIsLoading(true)
     try {
       const user = await authApi.login({ email, password })
-      setUser(user)
+      await setUser(user)
       onSuccess()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong.')

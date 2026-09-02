@@ -1,13 +1,14 @@
 import { create } from 'zustand'
 import { authApi } from '../api/auth'
 import { registerUnauthorizedHandler } from '../api/client'
+import { claimCaches, releaseCaches } from '../api/cache'
 import type { User } from '../types'
 
 interface AuthState {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
-  setUser: (user: User | null) => void
+  setUser: (user: User | null) => Promise<void>
   logout: () => Promise<void>
   init: () => Promise<void>
 }
@@ -17,7 +18,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
   isAuthenticated: false,
 
-  setUser(user: User | null) {
+  async setUser(user: User | null) {
+    // Purge before the store flips, so no authenticated view can fetch through
+    // a cache still holding the previous user's responses.
+    if (user) await claimCaches(user.id)
     set({ user, isAuthenticated: user !== null })
   },
 
@@ -27,6 +31,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch {
       // Backend clears the cookie regardless — swallow errors
     }
+    await releaseCaches()
     set({ user: null, isAuthenticated: false })
   },
 
@@ -34,6 +39,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Wire up the 401 handler so the client can clear state without
     // importing the store directly (avoids circular dependency).
     registerUnauthorizedHandler(() => {
+      // A 401 that reached here is an unrecoverable session — drop its cache too.
+      void releaseCaches()
       set({ user: null, isAuthenticated: false })
       // ProtectedRoute handles the redirect to /login via React Router — no hard reload needed
     })
@@ -41,6 +48,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true })
     try {
       const user = await authApi.me()
+      await claimCaches(user.id)
       set({ user, isAuthenticated: true })
     } catch {
       // No active session — not an error condition
