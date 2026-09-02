@@ -64,8 +64,6 @@ _Build in the order listed. Each row blocks the ones below it._
 ## In Review
 | ID | Title | PR | Notes |
 |---|---|---|---|
-| SM-9 | The coach is force-logged-out mid-game | [#20](https://github.com/omnia-core/sports-manager/pull/20) | Branch `fix/#19`. Single-flight refresh + replay in `frontend/src/api/client.ts`; one file, no backend change. Refresh is shared across concurrent 401s because the backend rotates and single-uses refresh tokens (`ValidateAndDeleteRefreshToken`), so a second concurrent refresh would clear the cookies and cause the very logout being fixed. **Deviation for review:** `/api/auth/me` is refreshable, against the card text — see the decision log. Verified by lint + build plus a throwaway esbuild/node harness driving the real module (35 assertions, 8 scenarios, all passing). **Not covered by CI** — SM-10 should port those cases. |
-| SM-14 | Cached data can outlive the session that fetched it on a shared device | [#24](https://github.com/omnia-core/sports-manager/pull/24) | Mechanism, now that it is fixed: the three `NetworkFirst` runtime caches in `vite.config.ts` are keyed by URL alone and nothing ever cleared them, so on a shared device a later session could be served an earlier one's responses whenever the 5s network timeout elapsed. Fix treats sign-in and sign-out as cache boundaries — purge every non-precache CacheStorage entry on logout and on an unrecoverable 401, and on sign-in whenever the user differs from the last one this device cached for. Same-user sign-in keeps the cache, so offline reads survive. Purging everything but the precache rather than an `api-*` allowlist means SM-1's game data is covered for free. |
 
 ## Blocked
 | ID | Title | Why | Proposed alternative |
@@ -74,6 +72,8 @@ _Build in the order listed. Each row blocks the ones below it._
 ## Done
 | ID | Title | Shipped | Notes |
 |---|---|---|---|
+| SM-9 | The coach is force-logged-out mid-game | 2026-09-02 ([#20](https://github.com/omnia-core/sports-manager/pull/20)) | Branch `fix/#19`. Single-flight refresh + replay in `frontend/src/api/client.ts`; one file, no backend change. Refresh is shared across concurrent 401s because the backend rotates and single-uses refresh tokens (`ValidateAndDeleteRefreshToken`), so a second concurrent refresh would clear the cookies and cause the very logout being fixed. **Deviation for review:** `/api/auth/me` is refreshable, against the card text — see the decision log. Verified by lint + build plus a throwaway esbuild/node harness driving the real module (35 assertions, 8 scenarios, all passing). **Not covered by CI** — SM-10 should port those cases. |
+| SM-14 | Cached data can outlive the session that fetched it on a shared device | 2026-09-02 ([#24](https://github.com/omnia-core/sports-manager/pull/24)) | Mechanism, now that it is fixed: the three `NetworkFirst` runtime caches in `vite.config.ts` are keyed by URL alone and nothing ever cleared them, so on a shared device a later session could be served an earlier one's responses whenever the 5s network timeout elapsed. Fix treats sign-in and sign-out as cache boundaries — purge every non-precache CacheStorage entry on logout and on an unrecoverable 401, and on sign-in whenever the user differs from the last one this device cached for. Same-user sign-in keeps the cache, so offline reads survive. Purging everything but the precache rather than an `api-*` allowlist means SM-1's game data is covered for free. |
 
 ---
 
