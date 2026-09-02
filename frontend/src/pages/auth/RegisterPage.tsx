@@ -26,7 +26,7 @@ export default function RegisterPage() {
     setIsLoading(true)
     try {
       const user = await authApi.register({ name, email, password })
-      setUser(user)
+      await setUser(user)
       if (inviteToken) {
         navigate(`/accept-invite?token=${inviteToken}`, { replace: true })
       } else {

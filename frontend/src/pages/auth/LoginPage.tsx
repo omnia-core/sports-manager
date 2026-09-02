@@ -24,7 +24,7 @@ export default function LoginPage() {
     setIsLoading(true)
     try {
       const user = await authApi.login({ email, password })
-      setUser(user)
+      await setUser(user)
       if (inviteToken) {
         navigate(`/accept-invite?token=${inviteToken}`, { replace: true })
       } else {
