@@ -124,4 +124,8 @@ export interface GamePlayer {
 export interface GameDetail {
   game: Game
   players: GamePlayer[]
+  // The requesting user's role on this game's team, straight from the
+  // endpoint. Deriving it from a separately-fetched team is what made a
+  // reloaded or deep-linked game read-only for its own coach.
+  caller_role: 'coach' | 'player'
 }

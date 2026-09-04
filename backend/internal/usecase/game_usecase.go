@@ -70,7 +70,8 @@ func (u *gameUsecase) GetGameDetail(ctx context.Context, req domains.GetGameDeta
 		return domains.GetGameDetailResponse{}, fmt.Errorf("get game for detail: %w", err)
 	}
 
-	if err := requireMember(ctx, u.teamRepo, gameRes.Game.TeamID, req.CallerID); err != nil {
+	callerRole, err := memberRole(ctx, u.teamRepo, gameRes.Game.TeamID, req.CallerID)
+	if err != nil {
 		return domains.GetGameDetailResponse{}, err
 	}
 
@@ -93,6 +94,7 @@ func (u *gameUsecase) GetGameDetail(ctx context.Context, req domains.GetGameDeta
 	if err != nil {
 		return domains.GetGameDetailResponse{}, fmt.Errorf("get game detail: %w", err)
 	}
+	res.CallerRole = callerRole
 	return res, nil
 }
 

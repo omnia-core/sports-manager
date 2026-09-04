@@ -1,8 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useGameStore } from '../../stores/gameStore'
-import { useAuthStore } from '../../stores/authStore'
-import { useTeamStore } from '../../stores/teamStore'
 import Spinner from '../../components/ui/Spinner'
 import type { GamePlayer, GameStats } from '../../types'
 
@@ -339,15 +337,15 @@ export default function GameDetailPage() {
   const { gameID } = useParams<{ gameID: string }>()
   const navigate = useNavigate()
   const { currentGame, isLoading, fetchGameDetail, updateGame, upsertStats, toggleDNP } = useGameStore()
-  const { currentTeam } = useTeamStore()
-  const { user } = useAuthStore()
   const [mode, setMode] = useState<'boxscore' | 'live'>('boxscore')
 
   useEffect(() => {
     if (gameID) void fetchGameDetail(gameID)
   }, [gameID, fetchGameDetail])
 
-  const isCoach = !!(currentTeam && user && currentTeam.coach_id === user.id)
+  // Comes from the game response itself, so a reload, a PWA relaunch or a
+  // shared link gives the coach the same page as navigating in from the team.
+  const isCoach = currentGame?.caller_role === 'coach'
 
   const handleSaveStats = useCallback(async (memberID: string, stats: GameStats) => {
     if (!gameID) return
