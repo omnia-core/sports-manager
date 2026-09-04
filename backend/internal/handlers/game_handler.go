@@ -100,7 +100,6 @@ func (h *GameHandler) GetGameDetail(w http.ResponseWriter, r *http.Request) {
 type updateGameBody struct {
 	OpponentName  *string `json:"opponent_name"`
 	GameDate      *string `json:"game_date"`
-	TeamScore     *int    `json:"team_score"`
 	OpponentScore *int    `json:"opponent_score"`
 }
 
@@ -125,7 +124,6 @@ func (h *GameHandler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		GameID:        gameID,
 		CallerID:      caller.ID,
 		OpponentName:  body.OpponentName,
-		TeamScore:     body.TeamScore,
 		OpponentScore: body.OpponentScore,
 	}
 	if body.GameDate != nil {

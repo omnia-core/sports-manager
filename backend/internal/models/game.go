@@ -12,7 +12,8 @@ type Game struct {
 	TeamID        uuid.UUID `json:"team_id"`
 	OpponentName  string    `json:"opponent_name"`
 	GameDate      time.Time `json:"game_date"`
-	TeamScore     *int      `json:"team_score"`
+	// TeamScore is derived from the box score on read, never stored.
+	TeamScore     int       `json:"team_score"`
 	OpponentScore *int      `json:"opponent_score"`
 	CreatedAt     time.Time `json:"created_at"`
 }

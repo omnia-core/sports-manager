@@ -108,7 +108,6 @@ type UpdateGameRequest struct {
 	CallerID      uuid.UUID
 	OpponentName  *string
 	GameDate      *time.Time
-	TeamScore     *int
 	OpponentScore *int
 }
 
