@@ -87,8 +87,8 @@ export interface Game {
   id: string
   team_id: string
   opponent_name: string
-  game_date: string  // "YYYY-MM-DD"
-  team_score: number | null
+  game_date: string          // RFC3339 timestamp, e.g. "2026-09-02T00:00:00Z"
+  team_score: number         // derived from the box score by the server; never written
   opponent_score: number | null
   created_at: string
 }

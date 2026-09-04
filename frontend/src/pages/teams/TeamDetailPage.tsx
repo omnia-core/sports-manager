@@ -4,6 +4,7 @@ import { useTeamStore } from '../../stores/teamStore'
 import { useAuthStore } from '../../stores/authStore'
 import { usePlaybookStore } from '../../stores/playbookStore'
 import { useGameStore } from '../../stores/gameStore'
+import { formatGameDate } from '../../lib/gameFormat'
 import { teamsApi } from '../../api/teams'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
@@ -614,7 +615,7 @@ function GamesTab({ teamID, isCoach }: { teamID: string; isCoach: boolean }) {
   }
 
   function gameResult(g: Game): string {
-    if (g.team_score === null || g.opponent_score === null) return '—'
+    if (g.opponent_score === null) return '—'
     if (g.team_score > g.opponent_score) return 'W'
     if (g.team_score < g.opponent_score) return 'L'
     return 'T'
@@ -675,11 +676,11 @@ function GamesTab({ teamID, isCoach }: { teamID: string; isCoach: boolean }) {
               >
                 <div>
                   <p className="text-sm font-semibold text-foreground">vs {g.opponent_name}</p>
-                  <p className="text-xs text-foreground/40">{g.game_date}</p>
+                  <p className="text-xs text-foreground/40">{formatGameDate(g.game_date)}</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="text-sm tabular-nums text-foreground/70">
-                    {g.team_score ?? '—'} — {g.opponent_score ?? '—'}
+                    {g.team_score} — {g.opponent_score ?? '—'}
                   </span>
                   <span className={`text-sm font-bold ${resultColor}`}>{result}</span>
                   {isCoach && (

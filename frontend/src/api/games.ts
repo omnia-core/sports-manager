@@ -16,7 +16,7 @@ export const gamesApi = {
 
   update(
     gameID: string,
-    data: { opponent_name?: string; game_date?: string; team_score?: number | null; opponent_score?: number | null },
+    data: { opponent_name?: string; game_date?: string; opponent_score?: number | null },
   ): Promise<Game> {
     return put<Game>(`/api/games/${gameID}`, data)
   },
