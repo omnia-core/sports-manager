@@ -8,7 +8,10 @@ import { useAuthStore } from '../../stores/authStore'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
-import type { DiagramJSON, PlayerToken, Arrow as ArrowType, Annotation } from '../../types'
+import {
+  migrateDiagram, emptyDiagram, addStepAfter, duplicateStep, deleteStep, updateStep, nextID,
+} from '../../lib/diagram'
+import type { DiagramJSON, DiagramStep, PlayerToken, Arrow as ArrowType, Annotation } from '../../types'
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 const COLOR_BG = '#020617'
@@ -28,6 +31,16 @@ const COURT_H_FULL = Math.round(28 * SCALE)                  // full-court depth
 const CANVAS_H = COURT_H_HALF + 40                           // canvas height (half) = 749px
 const CANVAS_H_FULL = COURT_H_FULL + 40                      // canvas height (full) = 1459px
 const PLAYER_RADIUS = 16
+// Konva node name for the floor rect. Uses `name` rather than a custom attr:
+// react-konva forwards `attrs` as an ordinary prop, so it lands at
+// node.attrs.attrs and the lookup silently misses.
+const COURT_BG_NAME = 'court-bg'
+// One ball per step, so it needs no generated id — a fixed one lets the shared
+// selection and delete paths treat it like any other token.
+const BALL_ID = 'ball'
+const BALL_RADIUS = 10
+const COLOR_BALL = '#F97316'
+const COLOR_GHOST = '#64748B'
 const COURT_X = 20
 const COURT_Y = 20
 const COURT_W = CANVAS_W - 40                                 // 760px
@@ -190,9 +203,7 @@ function arrowStyle(type: ArrowType['type']): { stroke: string; dash: number[]; 
 }
 
 // ─── Default empty diagram ────────────────────────────────────────────────────
-function emptyDiagram(): DiagramJSON {
-  return { background: 'halfcourt', players: [], arrows: [], annotations: [] }
-}
+
 
 // ─── Tool modes ───────────────────────────────────────────────────────────────
 type ToolMode = 'select' | 'arrow' | 'annotation'
@@ -207,6 +218,7 @@ export default function PlayEditorPage() {
   const { user } = useAuthStore()
 
   const [diagram, setDiagram] = useState<DiagramJSON>(emptyDiagram())
+  const [stepIndex, setStepIndex] = useState(0)
   const [selectedID, setSelectedID] = useState<string | null>(null)
   const [toolMode, setToolMode] = useState<ToolMode>('select')
   const [arrowStep, setArrowStep] = useState<ArrowStep>({ step: 'idle' })
@@ -227,7 +239,8 @@ export default function PlayEditorPage() {
   // Populate diagram from loaded play
   useEffect(() => {
     if (currentPlay) {
-      setDiagram(currentPlay.diagram_json ?? emptyDiagram())
+      setDiagram(migrateDiagram(currentPlay.diagram_json))
+      setStepIndex(0)
     }
   }, [currentPlay])
 
@@ -240,18 +253,46 @@ export default function PlayEditorPage() {
   }, [currentPlaybook, currentTeam, fetchTeam])
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  function nextID(prefix: string): string {
-    return `${prefix}${crypto.randomUUID()}`
+  // Every edit applies to the step the coach is looking at. The previous step
+  // renders behind it as ghosts, which is what makes a step read as what
+  // changed rather than as an unrelated diagram.
+  const step: DiagramStep = diagram.steps[stepIndex] ?? diagram.steps[0]
+  const ghostStep = stepIndex > 0 ? diagram.steps[stepIndex - 1] : null
+
+  function setStep(fn: (s: DiagramStep) => DiagramStep) {
+    setDiagram((d) => updateStep(d, stepIndex, fn))
+  }
+
+  // Clearing the interaction state on every step change stops a half-drawn
+  // arrow or a selection from one step leaking into the next.
+  function resetInteraction() {
+    setSelectedID(null)
+    setToolMode('select')
+    setArrowStep({ step: 'idle' })
+  }
+
+  // Navigation within the steps that exist right now.
+  function goToStep(i: number) {
+    setStepIndex(Math.max(0, Math.min(i, diagram.steps.length - 1)))
+    resetInteraction()
+  }
+
+  // Used after inserting or removing a step: `diagram` is still the previous
+  // value in this closure, so clamping against its length would send the coach
+  // back to the step they just left.
+  function jumpToStep(i: number) {
+    setStepIndex(Math.max(0, i))
+    resetInteraction()
   }
 
   function playerCenter(playerID: string): { x: number; y: number } | null {
-    const p = diagram.players.find((t) => t.id === playerID)
+    const p = step.players.find((t) => t.id === playerID)
     return p ? { x: p.x, y: p.y } : null
   }
 
   // ── Add players ───────────────────────────────────────────────────────────
   function addPlayer(team: 'offense' | 'defense') {
-    const existing = diagram.players.filter((p) => p.team === team)
+    const existing = step.players.filter((p) => p.team === team)
     // Use max existing label number + 1 so labels stay unique after deletions.
     const maxLabel = existing.reduce((max, p) => Math.max(max, parseInt(p.label) || 0), 0)
     const label = String(maxLabel + 1)
@@ -262,17 +303,27 @@ export default function PlayEditorPage() {
       team,
       label,
     }
-    setDiagram((d) => ({ ...d, players: [...d.players, token] }))
+    setStep((s) => ({ ...s, players: [...s.players, token] }))
     setToolMode('select')
+  }
+
+  // ── Ball ──────────────────────────────────────────────────────────────────
+  function addBall() {
+    setStep((s) => (s.ball ? s : { ...s, ball: { x: CANVAS_W / 2, y: 240 } }))
+    setToolMode('select')
+  }
+
+  function handleBallDragEnd(x: number, y: number) {
+    setStep((s) => ({ ...s, ball: { x, y } }))
   }
 
   // ── Player drag ───────────────────────────────────────────────────────────
   function handlePlayerDragEnd(id: string, x: number, y: number) {
-    setDiagram((d) => ({
-      ...d,
-      players: d.players.map((p) => (p.id === id ? { ...p, x, y } : p)),
+    setStep((s) => ({
+      ...s,
+      players: s.players.map((p) => (p.id === id ? { ...p, x, y } : p)),
       // Update arrow start points for arrows originating from this player
-      arrows: d.arrows.map((a) => {
+      arrows: s.arrows.map((a) => {
         if (a.from !== id) return a
         const pts = [...a.points]
         pts[0] = x
@@ -284,15 +335,15 @@ export default function PlayEditorPage() {
 
   // ── Annotation drag ───────────────────────────────────────────────────────
   function handleAnnotationDragEnd(id: string, x: number, y: number) {
-    setDiagram((d) => ({
-      ...d,
-      annotations: d.annotations.map((a) => (a.id === id ? { ...a, x, y } : a)),
+    setStep((s) => ({
+      ...s,
+      annotations: s.annotations.map((a) => (a.id === id ? { ...a, x, y } : a)),
     }))
   }
 
   // ── Annotation text edit ──────────────────────────────────────────────────
   function handleAnnotationDblClick(id: string) {
-    const ann = diagram.annotations.find((a) => a.id === id)
+    const ann = step.annotations.find((a) => a.id === id)
     if (!ann) return
     setAnnotationEdit({ id, text: ann.text })
   }
@@ -301,9 +352,9 @@ export default function PlayEditorPage() {
     if (!annotationEdit) return
     const trimmed = annotationEdit.text.trim()
     if (trimmed) {
-      setDiagram((d) => ({
-        ...d,
-        annotations: d.annotations.map((a) => (a.id === annotationEdit.id ? { ...a, text: trimmed } : a)),
+      setStep((s) => ({
+        ...s,
+        annotations: s.annotations.map((a) => (a.id === annotationEdit.id ? { ...a, text: trimmed } : a)),
       }))
     }
     setAnnotationEdit(null)
@@ -312,18 +363,55 @@ export default function PlayEditorPage() {
   // ── Delete selected ───────────────────────────────────────────────────────
   function deleteSelected() {
     if (!selectedID) return
-    setDiagram((d) => ({
-      ...d,
-      players: d.players.filter((p) => p.id !== selectedID),
-      arrows: d.arrows.filter((a) => a.id !== selectedID && a.from !== selectedID),
-      annotations: d.annotations.filter((a) => a.id !== selectedID),
+    setStep((s) => ({
+      ...s,
+      players: s.players.filter((p) => p.id !== selectedID),
+      arrows: s.arrows.filter((a) => a.id !== selectedID && a.from !== selectedID),
+      annotations: s.annotations.filter((a) => a.id !== selectedID),
+      ball: selectedID === BALL_ID ? null : s.ball,
     }))
     setSelectedID(null)
   }
 
-  // ── Stage click (arrow mode & annotation mode) ────────────────────────────
+  // ── Arrow creation ────────────────────────────────────────────────────────
+  // Both endpoints commit through here: a target player's centre, or a bare
+  // point on the floor.
+  function commitArrow(toX: number, toY: number) {
+    if (arrowStep.step !== 'picking-target') return
+    const arrow: ArrowType = {
+      id: nextID('a'),
+      from: arrowStep.fromPlayerID,
+      points: [arrowStep.fromX, arrowStep.fromY, toX, toY],
+      type: arrowType,
+    }
+    setStep((s) => ({ ...s, arrows: [...s.arrows, arrow] }))
+    setArrowStep({ step: 'idle' })
+    setToolMode('select')
+  }
+
+  // ── Player click ──────────────────────────────────────────────────────────
+  // Handled on the token's own Group, which closes over the player id. Konva
+  // reports e.target as the innermost shape (the Circle), never the Group, so
+  // reading an id off the event target would mean walking ancestors.
+  function handlePlayerClick(playerID: string) {
+    if (toolMode === 'select') {
+      setSelectedID(playerID)
+      return
+    }
+    if (toolMode !== 'arrow') return
+
+    const center = playerCenter(playerID)
+    if (!center) return
+
+    if (arrowStep.step === 'idle') {
+      setArrowStep({ step: 'picking-target', fromPlayerID: playerID, fromX: center.x, fromY: center.y })
+    } else if (playerID !== arrowStep.fromPlayerID) {
+      commitArrow(center.x, center.y)
+    }
+  }
+
+  // ── Stage click (empty space) ─────────────────────────────────────────────
   function handleStageClick(e: Konva.KonvaEventObject<MouseEvent>) {
-    const target = e.target
     const stage = stageRef.current
     if (!stage) return
 
@@ -336,56 +424,24 @@ export default function PlayEditorPage() {
         y: pos.y,
         text: 'Label',
       }
-      setDiagram((d) => ({ ...d, annotations: [...d.annotations, annotation] }))
+      setStep((s) => ({ ...s, annotations: [...s.annotations, annotation] }))
       setToolMode('select')
       return
     }
 
     if (toolMode === 'arrow') {
-      // Check if clicked on a player token
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-      const playerID = (target as any).attrs?.['data-player-id'] as string | undefined
-      if (!playerID) {
-        // Clicked empty space — cancel if picking target
-        if (arrowStep.step === 'picking-target') {
-          const pos = stage.getPointerPosition()
-          if (!pos) return
-          const arrow: ArrowType = {
-            id: nextID('a'),
-            from: arrowStep.fromPlayerID,
-            points: [arrowStep.fromX, arrowStep.fromY, pos.x, pos.y],
-            type: arrowType,
-          }
-          setDiagram((d) => ({ ...d, arrows: [...d.arrows, arrow] }))
-          setArrowStep({ step: 'idle' })
-          setToolMode('select')
-        }
-        return
-      }
-
-      const center = playerCenter(playerID)
-      if (!center) return
-
-      if (arrowStep.step === 'idle') {
-        setArrowStep({ step: 'picking-target', fromPlayerID: playerID, fromX: center.x, fromY: center.y })
-      } else if (arrowStep.step === 'picking-target' && playerID !== arrowStep.fromPlayerID) {
-        const arrow: ArrowType = {
-          id: nextID('a'),
-          from: arrowStep.fromPlayerID,
-          points: [arrowStep.fromX, arrowStep.fromY, center.x, center.y],
-          type: arrowType,
-        }
-        setDiagram((d) => ({ ...d, arrows: [...d.arrows, arrow] }))
-        setArrowStep({ step: 'idle' })
-        setToolMode('select')
+      // Empty floor ends the arrow at that point. Player targets never reach
+      // here — they commit through handlePlayerClick.
+      if (arrowStep.step === 'picking-target') {
+        const pos = stage.getPointerPosition()
+        if (!pos) return
+        commitArrow(pos.x, pos.y)
       }
       return
     }
 
-    // Select mode: click on empty stage deselects
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-    const isCourtBg = (target as any).attrs?.['data-court'] === true
-    if (target === stage || isCourtBg) {
+    // Select mode: clicking the floor deselects.
+    if (e.target === stage || e.target.name() === COURT_BG_NAME) {
       setSelectedID(null)
     }
   }
@@ -498,6 +554,14 @@ export default function PlayEditorPage() {
             >
               + Defense
             </button>
+            <button
+              onClick={addBall}
+              disabled={step.ball !== null}
+              className="rounded border border-orange-500/40 bg-transparent px-2 py-1.5 text-left text-xs font-medium text-orange-400 hover:bg-orange-500/10 disabled:opacity-30"
+              title={step.ball ? 'This step already has the ball' : 'Place the ball on the court'}
+            >
+              + Ball
+            </button>
 
             <div className="my-1 border-t border-secondary/10" />
 
@@ -566,126 +630,238 @@ export default function PlayEditorPage() {
           </div>
         )}
 
-        {/* Canvas */}
-        <div
-          className="overflow-auto rounded-lg border border-secondary/20"
-          style={{ background: COLOR_BG }}
-        >
-          <Stage
-            ref={stageRef}
-            width={CANVAS_W}
-            height={canvasH}
-            onClick={handleStageClick}
-            style={{ cursor: toolMode !== 'select' ? 'crosshair' : 'default' }}
+        {/* Step bar + canvas share a column so the bar sits above the court */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Step bar */}
+          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-secondary/20 bg-primary px-3 py-2">
+            <button
+              onClick={() => goToStep(stepIndex - 1)}
+              disabled={stepIndex === 0}
+              className="rounded px-2 py-1 text-sm text-foreground/60 hover:bg-white/10 disabled:opacity-25"
+              aria-label="Previous step"
+            >
+              ‹
+            </button>
+            <span className="min-w-[92px] text-center text-xs font-medium tabular-nums text-foreground">
+              Step {stepIndex + 1} / {diagram.steps.length}
+            </span>
+            <button
+              onClick={() => goToStep(stepIndex + 1)}
+              disabled={stepIndex >= diagram.steps.length - 1}
+              className="rounded px-2 py-1 text-sm text-foreground/60 hover:bg-white/10 disabled:opacity-25"
+              aria-label="Next step"
+            >
+              ›
+            </button>
+
+            {canEdit && (
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setDiagram((d) => addStepAfter(d, stepIndex))
+                    jumpToStep(stepIndex + 1)
+                  }}
+                  className="rounded bg-secondary/20 px-2 py-1 text-xs font-medium text-accent hover:bg-secondary/30"
+                >
+                  + Add step
+                </button>
+                <button
+                  onClick={() => {
+                    setDiagram((d) => duplicateStep(d, stepIndex))
+                    jumpToStep(stepIndex + 1)
+                  }}
+                  className="rounded bg-white/5 px-2 py-1 text-xs text-foreground/60 hover:bg-white/10"
+                >
+                  Duplicate
+                </button>
+                <button
+                  onClick={() => {
+                    setDiagram((d) => deleteStep(d, stepIndex))
+                    jumpToStep(Math.max(0, stepIndex - 1))
+                  }}
+                  disabled={diagram.steps.length <= 1}
+                  className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-25"
+                >
+                  Delete step
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Canvas */}
+          <div
+            className="overflow-auto rounded-lg border border-secondary/20"
+            style={{ background: COLOR_BG }}
           >
-            <Layer>
-              {/* Court background */}
-              <Rect x={0} y={0} width={CANVAS_W} height={canvasH} fill={COLOR_BG} listening={true} attrs={{ 'data-court': true }} />
-              {diagram.background === 'halfcourt' ? <HalfCourt /> : <FullCourt />}
+            <Stage
+              ref={stageRef}
+              width={CANVAS_W}
+              height={canvasH}
+              onClick={handleStageClick}
+              style={{ cursor: toolMode !== 'select' ? 'crosshair' : 'default' }}
+            >
+              <Layer>
+                {/* Court background */}
+                <Rect x={0} y={0} width={CANVAS_W} height={canvasH} fill={COLOR_BG} listening={true} name={COURT_BG_NAME} />
+                {/* Court markings are decoration. Excluded from hit testing so a
+                    click on the floor always lands on the named background above
+                    rather than on a line, an arc, or the court's own fill. */}
+                <Group listening={false}>
+                  {diagram.background === 'halfcourt' ? <HalfCourt /> : <FullCourt />}
+                </Group>
 
-              {/* Arrows */}
-              {diagram.arrows.map((arrow) => {
-                const style = arrowStyle(arrow.type)
-                const isSelected = selectedID === arrow.id
-                return (
-                  <Arrow
-                    key={arrow.id}
-                    points={arrow.points}
-                    stroke={isSelected ? COLOR_SELECTED : style.stroke}
-                    strokeWidth={style.strokeWidth}
-                    dash={style.dash}
-                    fill={isSelected ? COLOR_SELECTED : style.stroke}
-                    pointerLength={10}
-                    pointerWidth={8}
-                    onClick={() => setSelectedID(arrow.id)}
-                  />
-                )
-              })}
-
-              {/* Player tokens */}
-              {diagram.players.map((player) => {
-                const isOffense = player.team === 'offense'
-                const isSelected = selectedID === player.id
-                const isArrowSource =
-                  arrowStep.step === 'picking-target' && arrowStep.fromPlayerID === player.id
-                return (
-                  <Group
-                    key={player.id}
-                    x={player.x}
-                    y={player.y}
-                    draggable={canEdit}
-                    onDragEnd={(e) => handlePlayerDragEnd(player.id, e.target.x(), e.target.y())}
-                    onClick={(e) => {
-                      e.cancelBubble = true
-                      if (toolMode === 'select') {
-                        setSelectedID(player.id)
-                      }
-                      // arrow mode clicks handled in stage click via data attr
-                    }}
-                    attrs={{ 'data-player-id': player.id }}
-                  >
-                    {/* Selection ring */}
-                    {(isSelected || isArrowSource) && (
+                {/* Ghosts of the previous step — never interactive, so a click
+                    on one falls through to the floor. */}
+                {ghostStep && (
+                  <Group listening={false} opacity={0.28}>
+                    {ghostStep.players.map((p) => (
                       <Circle
-                        radius={PLAYER_RADIUS + 4}
-                        stroke={isArrowSource ? COLOR_ACCENT : COLOR_SELECTED}
+                        key={`ghost-${p.id}`}
+                        x={p.x}
+                        y={p.y}
+                        radius={PLAYER_RADIUS}
+                        stroke={COLOR_GHOST}
                         strokeWidth={2}
+                        dash={[4, 3]}
+                        fill="transparent"
+                      />
+                    ))}
+                    {ghostStep.ball && (
+                      <Circle
+                        x={ghostStep.ball.x}
+                        y={ghostStep.ball.y}
+                        radius={BALL_RADIUS}
+                        stroke={COLOR_GHOST}
+                        strokeWidth={2}
+                        dash={[4, 3]}
                         fill="transparent"
                       />
                     )}
-                    {/* Token circle */}
-                    <Circle
-                      radius={PLAYER_RADIUS}
-                      fill={isOffense ? COLOR_OFFENSE : COLOR_DEFENSE_FILL}
-                      stroke={isOffense ? 'transparent' : COLOR_DEFENSE_BORDER}
-                      strokeWidth={2}
-                    />
-                    {/* Label */}
-                    <Text
-                      text={player.label}
-                      fontSize={12}
-                      fontStyle="bold"
-                      fill={isOffense ? COLOR_WHITE : COLOR_ACCENT}
-                      width={PLAYER_RADIUS * 2}
-                      height={PLAYER_RADIUS * 2}
-                      offsetX={PLAYER_RADIUS}
-                      offsetY={PLAYER_RADIUS}
-                      align="center"
-                      verticalAlign="middle"
-                      listening={false}
-                    />
                   </Group>
-                )
-              })}
+                )}
 
-              {/* Annotations */}
-              {diagram.annotations.map((ann) => {
-                const isSelected = selectedID === ann.id
-                return (
-                  <Text
-                    key={ann.id}
-                    x={ann.x}
-                    y={ann.y}
-                    text={ann.text}
-                    fontSize={13}
-                    fill={isSelected ? COLOR_SELECTED : COLOR_WHITE}
+                {/* Arrows */}
+                {step.arrows.map((arrow) => {
+                  const style = arrowStyle(arrow.type)
+                  const isSelected = selectedID === arrow.id
+                  return (
+                    <Arrow
+                      key={arrow.id}
+                      points={arrow.points}
+                      stroke={isSelected ? COLOR_SELECTED : style.stroke}
+                      strokeWidth={style.strokeWidth}
+                      dash={style.dash}
+                      fill={isSelected ? COLOR_SELECTED : style.stroke}
+                      pointerLength={10}
+                      pointerWidth={8}
+                      onClick={() => setSelectedID(arrow.id)}
+                    />
+                  )
+                })}
+
+                {/* Player tokens */}
+                {step.players.map((player) => {
+                  const isOffense = player.team === 'offense'
+                  const isSelected = selectedID === player.id
+                  const isArrowSource =
+                    arrowStep.step === 'picking-target' && arrowStep.fromPlayerID === player.id
+                  return (
+                    <Group
+                      key={player.id}
+                      x={player.x}
+                      y={player.y}
+                      draggable={canEdit}
+                      onDragEnd={(e) => handlePlayerDragEnd(player.id, e.target.x(), e.target.y())}
+                      onClick={(e) => {
+                        e.cancelBubble = true
+                        handlePlayerClick(player.id)
+                      }}
+                    >
+                      {/* Selection ring */}
+                      {(isSelected || isArrowSource) && (
+                        <Circle
+                          radius={PLAYER_RADIUS + 4}
+                          stroke={isArrowSource ? COLOR_ACCENT : COLOR_SELECTED}
+                          strokeWidth={2}
+                          fill="transparent"
+                        />
+                      )}
+                      {/* Token circle */}
+                      <Circle
+                        radius={PLAYER_RADIUS}
+                        fill={isOffense ? COLOR_OFFENSE : COLOR_DEFENSE_FILL}
+                        stroke={isOffense ? 'transparent' : COLOR_DEFENSE_BORDER}
+                        strokeWidth={2}
+                      />
+                      {/* Label */}
+                      <Text
+                        text={player.label}
+                        fontSize={12}
+                        fontStyle="bold"
+                        fill={isOffense ? COLOR_WHITE : COLOR_ACCENT}
+                        width={PLAYER_RADIUS * 2}
+                        height={PLAYER_RADIUS * 2}
+                        offsetX={PLAYER_RADIUS}
+                        offsetY={PLAYER_RADIUS}
+                        align="center"
+                        verticalAlign="middle"
+                        listening={false}
+                      />
+                    </Group>
+                  )
+                })}
+
+                {/* Annotations */}
+                {step.annotations.map((ann) => {
+                  const isSelected = selectedID === ann.id
+                  return (
+                    <Text
+                      key={ann.id}
+                      x={ann.x}
+                      y={ann.y}
+                      text={ann.text}
+                      fontSize={13}
+                      fill={isSelected ? COLOR_SELECTED : COLOR_WHITE}
+                      draggable={canEdit}
+                      onDragEnd={(e) => handleAnnotationDragEnd(ann.id, e.target.x(), e.target.y())}
+                      onClick={(e) => {
+                        e.cancelBubble = true
+                        setSelectedID(ann.id)
+                      }}
+                      onDblClick={(e) => {
+                        e.cancelBubble = true
+                        if (canEdit) handleAnnotationDblClick(ann.id)
+                      }}
+                      padding={4}
+                      title={canEdit ? 'Double-click to edit text' : undefined}
+                    />
+                  )
+                })}
+
+                {/* Ball — drawn last so it reads as being on top of the play */}
+                {step.ball && (
+                  <Group
+                    x={step.ball.x}
+                    y={step.ball.y}
                     draggable={canEdit}
-                    onDragEnd={(e) => handleAnnotationDragEnd(ann.id, e.target.x(), e.target.y())}
+                    onDragEnd={(e) => handleBallDragEnd(e.target.x(), e.target.y())}
                     onClick={(e) => {
                       e.cancelBubble = true
-                      setSelectedID(ann.id)
+                      if (toolMode === 'select') setSelectedID(BALL_ID)
                     }}
-                    onDblClick={(e) => {
-                      e.cancelBubble = true
-                      if (canEdit) handleAnnotationDblClick(ann.id)
-                    }}
-                    padding={4}
-                    title={canEdit ? 'Double-click to edit text' : undefined}
-                  />
-                )
-              })}
-            </Layer>
-          </Stage>
+                  >
+                    {selectedID === BALL_ID && (
+                      <Circle radius={BALL_RADIUS + 4} stroke={COLOR_SELECTED} strokeWidth={2} fill="transparent" />
+                    )}
+                    <Circle radius={BALL_RADIUS} fill={COLOR_BALL} />
+                    {/* Two seams, so it reads as a ball rather than a dot */}
+                    <Line points={[-BALL_RADIUS, 0, BALL_RADIUS, 0]} stroke={COLOR_BG} strokeWidth={1.5} listening={false} />
+                    <Line points={[0, -BALL_RADIUS, 0, BALL_RADIUS]} stroke={COLOR_BG} strokeWidth={1.5} listening={false} />
+                  </Group>
+                )}
+              </Layer>
+            </Stage>
+          </div>
         </div>
       </div>
 
@@ -721,7 +897,7 @@ export default function PlayEditorPage() {
         </span>
         {canEdit && <span>Double-click annotation to edit text</span>}
         <span className="ml-auto">
-          {diagram.players.length} players · {diagram.arrows.length} arrows · {diagram.annotations.length} annotations
+          Step {stepIndex + 1} of {diagram.steps.length} · {step.players.length} players · {step.arrows.length} arrows · {step.annotations.length} annotations
         </span>
       </div>
     </div>
