@@ -84,8 +84,13 @@ export const useGameStore = create<GameState>((set) => ({
       return {
         currentGame: {
           ...s.currentGame,
+          // Only the flag changes. The server's ToggleDNP updates is_dnp and
+          // never touches game_stats, so dropping the line locally invented a
+          // loss the backend had not performed — and the next box-score edit
+          // rebuilt from emptyStats() and committed those zeros over real
+          // numbers.
           players: s.currentGame.players.map((p: GamePlayer) =>
-            p.member_id === memberID ? { ...p, is_dnp, stats: is_dnp ? null : p.stats } : p,
+            p.member_id === memberID ? { ...p, is_dnp } : p,
           ),
         },
       }
