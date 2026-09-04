@@ -19,11 +19,23 @@ func NewGameRepository(db *sql.DB) domains.GameRepository {
 	return &gameRepository{db: db}
 }
 
+// teamScoreExpr derives a game's own score from its box score, counting only
+// players who are not marked DNP. Correlated on the alias `g` for games.
+//
+// The score is derived rather than stored: a stored copy stopped moving once
+// written, so a later stat correction left the header disagreeing with the box
+// score directly beneath it.
+const teamScoreExpr = `(SELECT COALESCE(SUM(gs.pts), 0)
+		  FROM game_players gp
+		  JOIN game_stats gs ON gs.game_player_id = gp.id
+		 WHERE gp.game_id = g.id AND NOT gp.is_dnp)`
+
 func (r *gameRepository) CreateGame(ctx context.Context, req domains.CreateGameRequest) (domains.CreateGameResponse, error) {
+	// A game has no stats at creation, so its derived score is 0.
 	const q = `
 		INSERT INTO games (team_id, opponent_name, game_date)
 		VALUES ($1, $2, $3)
-		RETURNING id, team_id, opponent_name, game_date, team_score, opponent_score, created_at`
+		RETURNING id, team_id, opponent_name, game_date, 0, opponent_score, created_at`
 	g := &models.Game{}
 	err := r.db.QueryRowContext(ctx, q, req.TeamID, req.OpponentName, req.GameDate).Scan(
 		&g.ID, &g.TeamID, &g.OpponentName, &g.GameDate, &g.TeamScore, &g.OpponentScore, &g.CreatedAt,
@@ -51,8 +63,8 @@ func (r *gameRepository) SeedGamePlayers(ctx context.Context, req domains.SeedGa
 
 func (r *gameRepository) GetGame(ctx context.Context, req domains.GetGameRequest) (domains.GetGameResponse, error) {
 	const q = `
-		SELECT id, team_id, opponent_name, game_date, team_score, opponent_score, created_at
-		FROM games WHERE id = $1`
+		SELECT g.id, g.team_id, g.opponent_name, g.game_date, ` + teamScoreExpr + `, g.opponent_score, g.created_at
+		FROM games g WHERE g.id = $1`
 	g := &models.Game{}
 	err := r.db.QueryRowContext(ctx, q, req.GameID).Scan(
 		&g.ID, &g.TeamID, &g.OpponentName, &g.GameDate, &g.TeamScore, &g.OpponentScore, &g.CreatedAt,
@@ -68,8 +80,8 @@ func (r *gameRepository) GetGame(ctx context.Context, req domains.GetGameRequest
 
 func (r *gameRepository) ListGames(ctx context.Context, req domains.ListGamesRequest) (domains.ListGamesResponse, error) {
 	const q = `
-		SELECT id, team_id, opponent_name, game_date, team_score, opponent_score, created_at
-		FROM games WHERE team_id = $1 ORDER BY game_date DESC, created_at DESC`
+		SELECT g.id, g.team_id, g.opponent_name, g.game_date, ` + teamScoreExpr + `, g.opponent_score, g.created_at
+		FROM games g WHERE g.team_id = $1 ORDER BY g.game_date DESC, g.created_at DESC`
 	rows, err := r.db.QueryContext(ctx, q, req.TeamID)
 	if err != nil {
 		return domains.ListGamesResponse{}, fmt.Errorf("list games: %w", err)
@@ -163,17 +175,22 @@ func (r *gameRepository) GetGameDetail(ctx context.Context, req domains.GetGameD
 }
 
 func (r *gameRepository) UpdateGame(ctx context.Context, req domains.UpdateGameRequest) (domains.UpdateGameResponse, error) {
+	// The update runs in a CTE so the returned row can carry the derived team
+	// score, which a bare UPDATE ... RETURNING cannot correlate.
 	const q = `
-		UPDATE games SET
-			opponent_name  = COALESCE($1, opponent_name),
-			game_date      = COALESCE($2, game_date),
-			team_score     = COALESCE($3, team_score),
-			opponent_score = COALESCE($4, opponent_score)
-		WHERE id = $5
-		RETURNING id, team_id, opponent_name, game_date, team_score, opponent_score, created_at`
+		WITH upd AS (
+			UPDATE games SET
+				opponent_name  = COALESCE($1, opponent_name),
+				game_date      = COALESCE($2, game_date),
+				opponent_score = COALESCE($3, opponent_score)
+			WHERE id = $4
+			RETURNING id, team_id, opponent_name, game_date, opponent_score, created_at
+		)
+		SELECT g.id, g.team_id, g.opponent_name, g.game_date, ` + teamScoreExpr + `, g.opponent_score, g.created_at
+		FROM upd g`
 	g := &models.Game{}
 	err := r.db.QueryRowContext(ctx, q,
-		req.OpponentName, req.GameDate, req.TeamScore, req.OpponentScore, req.GameID,
+		req.OpponentName, req.GameDate, req.OpponentScore, req.GameID,
 	).Scan(&g.ID, &g.TeamID, &g.OpponentName, &g.GameDate, &g.TeamScore, &g.OpponentScore, &g.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domains.UpdateGameResponse{}, ErrNotFound

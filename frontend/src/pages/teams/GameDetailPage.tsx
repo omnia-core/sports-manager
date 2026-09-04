@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useGameStore } from '../../stores/gameStore'
 import Spinner from '../../components/ui/Spinner'
+import Modal from '../../components/ui/Modal'
+import Button from '../../components/ui/Button'
+import { formatGameDate } from '../../lib/gameFormat'
 import type { GamePlayer, GameStats } from '../../types'
 
 // ── Computed helpers ──────────────────────────────────────────────────────────
@@ -180,6 +183,86 @@ function BoxScoreTable({
   )
 }
 
+// ── Opponent score entry ──────────────────────────────────────────────────────
+
+// A keypad rather than a text field: this is entered courtside, one-handed,
+// and it replaces a window.prompt that could not be styled, could not be
+// dismissed by tapping away, and offered a full keyboard for a number.
+function OpponentScoreModal({
+  initial,
+  onClose,
+  onSave,
+}: {
+  initial: number | null
+  onClose: () => void
+  onSave: (score: number) => Promise<void>
+}) {
+  const [value, setValue] = useState(initial === null ? '' : String(initial))
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const push = (d: string) => setValue((v) => (v === '0' ? d : (v + d).slice(0, 3)))
+
+  async function handleSave() {
+    const n = parseInt(value, 10)
+    if (isNaN(n) || n < 0) {
+      setError('Enter a score of 0 or more.')
+      return
+    }
+    setIsSaving(true)
+    setError(null)
+    try {
+      await onSave(n)
+      onClose()
+    } catch {
+      setError('Could not save the score. Check your connection and try again.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Modal onClose={onClose} title="Opponent score">
+      <div className="flex flex-col gap-3">
+        <p className="text-center text-4xl font-bold tabular-nums text-foreground">{value === '' ? '—' : value}</p>
+        <div className="grid grid-cols-3 gap-2">
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
+            <button
+              key={d}
+              onClick={() => push(d)}
+              className="rounded-lg border border-secondary/20 py-3 text-lg font-semibold text-foreground hover:bg-white/5"
+            >
+              {d}
+            </button>
+          ))}
+          <button
+            onClick={() => setValue('')}
+            className="rounded-lg border border-secondary/20 py-3 text-sm text-foreground/50 hover:bg-white/5"
+          >
+            Clear
+          </button>
+          <button
+            onClick={() => push('0')}
+            className="rounded-lg border border-secondary/20 py-3 text-lg font-semibold text-foreground hover:bg-white/5"
+          >
+            0
+          </button>
+          <button
+            onClick={() => setValue((v) => v.slice(0, -1))}
+            className="rounded-lg border border-secondary/20 py-3 text-sm text-foreground/50 hover:bg-white/5"
+          >
+            ⌫
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-400">{error}</p>}
+        <Button onClick={() => void handleSave()} isLoading={isSaving} disabled={value === ''}>
+          Save
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
 // ── Live Mode ─────────────────────────────────────────────────────────────────
 
 type LivePanelStat =
@@ -344,6 +427,7 @@ export default function GameDetailPage() {
   const navigate = useNavigate()
   const { currentGame, isLoading, fetchGameDetail, updateGame, upsertStats, toggleDNP } = useGameStore()
   const [mode, setMode] = useState<'boxscore' | 'live'>('boxscore')
+  const [scoreModalOpen, setScoreModalOpen] = useState(false)
   // Availability toggles are a network round trip. Track which row is in
   // flight so its control can disable itself, and surface a failure instead of
   // leaving the row silently showing the old value.
@@ -400,29 +484,34 @@ export default function GameDetailPage() {
             ← Back
           </button>
           <h1 className="mt-1 text-xl font-bold text-foreground">vs {game.opponent_name}</h1>
-          <p className="text-sm text-foreground/50">{game.game_date}</p>
+          <p className="text-sm text-foreground/50">{formatGameDate(game.game_date)}</p>
         </div>
         <div className="text-right">
+          {/* Our score is the box score's own total, computed locally so it
+              moves as stats are entered without waiting for a refetch. */}
           <p className="text-3xl font-bold text-foreground tabular-nums">
-            {game.team_score ?? teamScore} — {game.opponent_score ?? '?'}
+            {teamScore} — {game.opponent_score ?? '?'}
           </p>
           {isCoach && (
             <div className="mt-1 flex justify-end gap-2">
               <button
-                onClick={() => {
-                  const opp = window.prompt('Opponent score:', String(game.opponent_score ?? ''))
-                  if (opp === null) return
-                  const n = parseInt(opp, 10)
-                  if (!isNaN(n)) void updateGame(game.id, { opponent_score: n })
-                }}
+                onClick={() => setScoreModalOpen(true)}
                 className="text-xs text-foreground/40 hover:text-foreground"
               >
-                Set opp. score
+                {game.opponent_score === null ? 'Set opp. score' : 'Edit opp. score'}
               </button>
             </div>
           )}
         </div>
       </div>
+
+      {scoreModalOpen && (
+        <OpponentScoreModal
+          initial={game.opponent_score}
+          onClose={() => setScoreModalOpen(false)}
+          onSave={(score) => updateGame(game.id, { opponent_score: score })}
+        />
+      )}
 
       {/* Mode toggle */}
       {isCoach && (
