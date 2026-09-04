@@ -54,11 +54,34 @@ export interface Play {
   created_at: string
 }
 
+// A play is an ordered sequence of steps. Each step holds where everyone
+// stands, what happens during that step, and where the ball is.
 export interface DiagramJSON {
   background: 'halfcourt' | 'fullcourt'
+  steps: DiagramStep[]
+}
+
+export interface DiagramStep {
+  id: string
+  name: string
   players: PlayerToken[]
   arrows: Arrow[]
   annotations: Annotation[]
+  ball: BallToken | null
+}
+
+export interface BallToken {
+  x: number
+  y: number
+}
+
+// The shape plays were saved in before sequences existed: one flat frame with
+// no steps. Read by migrateDiagram, never written.
+export interface LegacyDiagramJSON {
+  background?: 'halfcourt' | 'fullcourt'
+  players?: PlayerToken[]
+  arrows?: Arrow[]
+  annotations?: Annotation[]
 }
 
 export interface PlayerToken {
