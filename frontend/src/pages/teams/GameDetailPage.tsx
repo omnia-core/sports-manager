@@ -88,11 +88,13 @@ function BoxScoreTable({
   canEdit,
   onSaveStats,
   onToggleDNP,
+  pendingMemberID,
 }: {
   players: GamePlayer[]
   canEdit: boolean
   onSaveStats: (memberID: string, stats: GameStats) => Promise<void>
   onToggleDNP: (memberID: string) => Promise<void>
+  pendingMemberID: string | null
 }) {
   function handleStatChange(player: GamePlayer, key: keyof GameStats, val: number) {
     const current = player.stats ?? emptyStats()
@@ -127,9 +129,12 @@ function BoxScoreTable({
                     {canEdit && (
                       <button
                         onClick={() => void onToggleDNP(player.member_id)}
-                        className="text-xs text-foreground/30 hover:text-foreground/60"
-                        title="Mark as DNP"
-                      >DNP</button>
+                        disabled={pendingMemberID === player.member_id}
+                        className="ml-1 shrink-0 rounded border border-secondary/20 px-2 py-1 text-[11px] leading-none text-foreground/40 hover:border-secondary/40 hover:text-foreground/70 disabled:opacity-40"
+                        title={`Mark ${player.name} as did not play`}
+                      >
+                        {pendingMemberID === player.member_id ? '…' : 'Mark DNP'}
+                      </button>
                     )}
                   </div>
                 </td>
@@ -162,9 +167,10 @@ function BoxScoreTable({
                 {canEdit && (
                   <button
                     onClick={() => void onToggleDNP(p.member_id)}
-                    className="ml-1 text-xs text-secondary hover:underline"
+                    disabled={pendingMemberID === p.member_id}
+                    className="ml-1 shrink-0 rounded border border-secondary/30 px-2 py-1 text-[11px] leading-none text-secondary hover:border-secondary/60 disabled:opacity-40"
                   >
-                    Mark active
+                    {pendingMemberID === p.member_id ? '…' : 'Mark active'}
                   </button>
                 )}
               </div>
@@ -342,6 +348,11 @@ export default function GameDetailPage() {
   const { currentTeam } = useTeamStore()
   const { user } = useAuthStore()
   const [mode, setMode] = useState<'boxscore' | 'live'>('boxscore')
+  // Availability toggles are a network round trip. Track which row is in
+  // flight so its control can disable itself, and surface a failure instead of
+  // leaving the row silently showing the old value.
+  const [dnpPending, setDnpPending] = useState<string | null>(null)
+  const [dnpError, setDnpError] = useState<string | null>(null)
 
   useEffect(() => {
     if (gameID) void fetchGameDetail(gameID)
@@ -356,7 +367,15 @@ export default function GameDetailPage() {
 
   const handleToggleDNP = useCallback(async (memberID: string) => {
     if (!gameID) return
-    await toggleDNP(gameID, memberID)
+    setDnpPending(memberID)
+    setDnpError(null)
+    try {
+      await toggleDNP(gameID, memberID)
+    } catch {
+      setDnpError('Could not change availability. Check your connection and try again.')
+    } finally {
+      setDnpPending(null)
+    }
   }, [gameID, toggleDNP])
 
   const handleLiveAction = useCallback(async (memberID: string, action: LivePanelStat) => {
@@ -426,12 +445,20 @@ export default function GameDetailPage() {
 
       {/* Content */}
       {mode === 'boxscore' ? (
-        <BoxScoreTable
-          players={players}
-          canEdit={isCoach}
-          onSaveStats={handleSaveStats}
-          onToggleDNP={handleToggleDNP}
-        />
+        <>
+          {dnpError && (
+            <p className="mb-2 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              {dnpError}
+            </p>
+          )}
+          <BoxScoreTable
+            players={players}
+            canEdit={isCoach}
+            onSaveStats={handleSaveStats}
+            onToggleDNP={handleToggleDNP}
+            pendingMemberID={dnpPending}
+          />
+        </>
       ) : (
         <LiveMode
           players={players}
