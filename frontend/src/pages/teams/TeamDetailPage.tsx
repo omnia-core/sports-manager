@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTeamStore } from '../../stores/teamStore'
 import { useAuthStore } from '../../stores/authStore'
@@ -28,6 +28,18 @@ function AddRosterForm({ teamID, onDone }: { teamID: string; onDone: () => void 
   const [position, setPosition] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  // A roster is entered in one sitting, a dozen players at a time. The form
+  // stays open and refocused after each save so that is one pass, not one
+  // open-fill-submit-reopen cycle per player.
+  const [addedCount, setAddedCount] = useState(0)
+  const nameRef = useRef<HTMLInputElement>(null)
+
+  // Refocus once the save has settled, not inside the handler: the input is
+  // disabled while the request is in flight, and focusing a disabled element
+  // does nothing.
+  useEffect(() => {
+    if (addedCount > 0 && !isLoading) nameRef.current?.focus()
+  }, [addedCount, isLoading])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -43,7 +55,7 @@ function AddRosterForm({ teamID, onDone }: { teamID: string; onDone: () => void 
       setName('')
       setJersey('')
       setPosition('')
-      onDone()
+      setAddedCount((n) => n + 1)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to add player.')
     } finally {
@@ -53,15 +65,24 @@ function AddRosterForm({ teamID, onDone }: { teamID: string; onDone: () => void 
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 flex flex-col gap-3 rounded-lg border border-secondary/20 bg-primary p-4">
-      <p className="text-sm font-medium text-foreground/70">Add player to roster</p>
+      <div className="flex items-baseline justify-between">
+        <p className="text-sm font-medium text-foreground/70">Add player to roster</p>
+        {addedCount > 0 && (
+          <p className="text-xs text-secondary">
+            {addedCount} added — keep going
+          </p>
+        )}
+      </div>
       <div className="flex gap-2">
         <Input
+          ref={nameRef}
           label="Name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Player name"
           className="flex-1"
           disabled={isLoading}
+          autoFocus
         />
         <Input
           label="Jersey #"
@@ -83,7 +104,9 @@ function AddRosterForm({ teamID, onDone }: { teamID: string; onDone: () => void 
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
       <div className="flex justify-end gap-2">
-        <Button variant="secondary" type="button" onClick={onDone}>Cancel</Button>
+        <Button variant="secondary" type="button" onClick={onDone}>
+          {addedCount > 0 ? 'Done' : 'Cancel'}
+        </Button>
         <Button type="submit" isLoading={isLoading}>Add Player</Button>
       </div>
     </form>
@@ -827,6 +850,18 @@ export default function TeamDetailPage() {
                   <p className="mb-3 rounded-md bg-red-900/30 px-3 py-2 text-sm text-red-300 border border-red-800">
                     {removeError}
                   </p>
+                )}
+                {/* A team whose only member is the coach has just been created.
+                    Name the next step rather than leaving them on a roster of
+                    one wondering what this screen is for. */}
+                {isCoach && members.length <= 1 && !showAddRoster && (
+                  <div className="mb-4 rounded-lg border border-secondary/30 bg-secondary/5 px-4 py-3">
+                    <p className="text-sm font-medium text-foreground">Step 1 — add your players</p>
+                    <p className="mt-1 text-xs text-foreground/50">
+                      Add them by name now; you can invite them to their own accounts later.
+                    </p>
+                    <Button className="mt-3" onClick={() => setShowAddRoster(true)}>Add Player</Button>
+                  </div>
                 )}
                 <div className="mb-4 flex items-center justify-between">
                   <p className="text-sm text-foreground/50">{members.length} member{members.length !== 1 ? 's' : ''}</p>
