@@ -28,6 +28,10 @@ const COURT_H_FULL = Math.round(28 * SCALE)                  // full-court depth
 const CANVAS_H = COURT_H_HALF + 40                           // canvas height (half) = 749px
 const CANVAS_H_FULL = COURT_H_FULL + 40                      // canvas height (full) = 1459px
 const PLAYER_RADIUS = 16
+// Konva node name for the floor rect. Uses `name` rather than a custom attr:
+// react-konva forwards `attrs` as an ordinary prop, so it lands at
+// node.attrs.attrs and the lookup silently misses.
+const COURT_BG_NAME = 'court-bg'
 const COURT_X = 20
 const COURT_Y = 20
 const COURT_W = CANVAS_W - 40                                 // 760px
@@ -321,9 +325,45 @@ export default function PlayEditorPage() {
     setSelectedID(null)
   }
 
-  // ── Stage click (arrow mode & annotation mode) ────────────────────────────
+  // ── Arrow creation ────────────────────────────────────────────────────────
+  // Both endpoints commit through here: a target player's centre, or a bare
+  // point on the floor.
+  function commitArrow(toX: number, toY: number) {
+    if (arrowStep.step !== 'picking-target') return
+    const arrow: ArrowType = {
+      id: nextID('a'),
+      from: arrowStep.fromPlayerID,
+      points: [arrowStep.fromX, arrowStep.fromY, toX, toY],
+      type: arrowType,
+    }
+    setDiagram((d) => ({ ...d, arrows: [...d.arrows, arrow] }))
+    setArrowStep({ step: 'idle' })
+    setToolMode('select')
+  }
+
+  // ── Player click ──────────────────────────────────────────────────────────
+  // Handled on the token's own Group, which closes over the player id. Konva
+  // reports e.target as the innermost shape (the Circle), never the Group, so
+  // reading an id off the event target would mean walking ancestors.
+  function handlePlayerClick(playerID: string) {
+    if (toolMode === 'select') {
+      setSelectedID(playerID)
+      return
+    }
+    if (toolMode !== 'arrow') return
+
+    const center = playerCenter(playerID)
+    if (!center) return
+
+    if (arrowStep.step === 'idle') {
+      setArrowStep({ step: 'picking-target', fromPlayerID: playerID, fromX: center.x, fromY: center.y })
+    } else if (playerID !== arrowStep.fromPlayerID) {
+      commitArrow(center.x, center.y)
+    }
+  }
+
+  // ── Stage click (empty space) ─────────────────────────────────────────────
   function handleStageClick(e: Konva.KonvaEventObject<MouseEvent>) {
-    const target = e.target
     const stage = stageRef.current
     if (!stage) return
 
@@ -342,50 +382,18 @@ export default function PlayEditorPage() {
     }
 
     if (toolMode === 'arrow') {
-      // Check if clicked on a player token
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-      const playerID = (target as any).attrs?.['data-player-id'] as string | undefined
-      if (!playerID) {
-        // Clicked empty space — cancel if picking target
-        if (arrowStep.step === 'picking-target') {
-          const pos = stage.getPointerPosition()
-          if (!pos) return
-          const arrow: ArrowType = {
-            id: nextID('a'),
-            from: arrowStep.fromPlayerID,
-            points: [arrowStep.fromX, arrowStep.fromY, pos.x, pos.y],
-            type: arrowType,
-          }
-          setDiagram((d) => ({ ...d, arrows: [...d.arrows, arrow] }))
-          setArrowStep({ step: 'idle' })
-          setToolMode('select')
-        }
-        return
-      }
-
-      const center = playerCenter(playerID)
-      if (!center) return
-
-      if (arrowStep.step === 'idle') {
-        setArrowStep({ step: 'picking-target', fromPlayerID: playerID, fromX: center.x, fromY: center.y })
-      } else if (arrowStep.step === 'picking-target' && playerID !== arrowStep.fromPlayerID) {
-        const arrow: ArrowType = {
-          id: nextID('a'),
-          from: arrowStep.fromPlayerID,
-          points: [arrowStep.fromX, arrowStep.fromY, center.x, center.y],
-          type: arrowType,
-        }
-        setDiagram((d) => ({ ...d, arrows: [...d.arrows, arrow] }))
-        setArrowStep({ step: 'idle' })
-        setToolMode('select')
+      // Empty floor ends the arrow at that point. Player targets never reach
+      // here — they commit through handlePlayerClick.
+      if (arrowStep.step === 'picking-target') {
+        const pos = stage.getPointerPosition()
+        if (!pos) return
+        commitArrow(pos.x, pos.y)
       }
       return
     }
 
-    // Select mode: click on empty stage deselects
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-    const isCourtBg = (target as any).attrs?.['data-court'] === true
-    if (target === stage || isCourtBg) {
+    // Select mode: clicking the floor deselects.
+    if (e.target === stage || e.target.name() === COURT_BG_NAME) {
       setSelectedID(null)
     }
   }
@@ -580,8 +588,13 @@ export default function PlayEditorPage() {
           >
             <Layer>
               {/* Court background */}
-              <Rect x={0} y={0} width={CANVAS_W} height={canvasH} fill={COLOR_BG} listening={true} attrs={{ 'data-court': true }} />
-              {diagram.background === 'halfcourt' ? <HalfCourt /> : <FullCourt />}
+              <Rect x={0} y={0} width={CANVAS_W} height={canvasH} fill={COLOR_BG} listening={true} name={COURT_BG_NAME} />
+              {/* Court markings are decoration. Excluded from hit testing so a
+                  click on the floor always lands on the named background above
+                  rather than on a line, an arc, or the court's own fill. */}
+              <Group listening={false}>
+                {diagram.background === 'halfcourt' ? <HalfCourt /> : <FullCourt />}
+              </Group>
 
               {/* Arrows */}
               {diagram.arrows.map((arrow) => {
@@ -617,12 +630,8 @@ export default function PlayEditorPage() {
                     onDragEnd={(e) => handlePlayerDragEnd(player.id, e.target.x(), e.target.y())}
                     onClick={(e) => {
                       e.cancelBubble = true
-                      if (toolMode === 'select') {
-                        setSelectedID(player.id)
-                      }
-                      // arrow mode clicks handled in stage click via data attr
+                      handlePlayerClick(player.id)
                     }}
-                    attrs={{ 'data-player-id': player.id }}
                   >
                     {/* Selection ring */}
                     {(isSelected || isArrowSource) && (
