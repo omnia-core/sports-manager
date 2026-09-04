@@ -1,6 +1,8 @@
 import { useId } from 'react'
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+// ComponentPropsWithRef rather than InputHTMLAttributes so callers can hold a
+// ref to the inner input (React 19 passes ref through as an ordinary prop).
+interface InputProps extends React.ComponentPropsWithRef<'input'> {
   label: string
   error?: string
 }
