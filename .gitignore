@@ -30,6 +30,7 @@ CLAUDE.md
 
 # Agent workfiles — internal working notes, never pushed
 docs/
+CHANGELOG.md
 
 # Misc
 *.pem
