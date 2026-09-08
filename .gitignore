@@ -28,6 +28,9 @@ Thumbs.db
 .claude/
 CLAUDE.md
 
+# Agent workfiles — internal working notes, never pushed
+docs/
+
 # Misc
 *.pem
 npm-debug.log*
