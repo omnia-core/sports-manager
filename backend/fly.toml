@@ -18,10 +18,15 @@ primary_region = "nrt"
 [[services]]
   internal_port = 8080
   protocol = "tcp"
-  # Reachable only inside the organisation's private network.
   auto_stop_machines = false
   auto_start_machines = false
   min_machines_running = 1
+
+  # A service needs a declared port for Fly's proxy to route to it — this is
+  # what the .flycast address serves on. Privacy comes from never allocating a
+  # public IP for this app, not from leaving the port off.
+  [[services.ports]]
+    port = 8080
 
   [[services.tcp_checks]]
     interval = "15s"
