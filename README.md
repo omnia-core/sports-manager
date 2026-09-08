@@ -108,13 +108,11 @@ migrate -path backend/migrations -database "postgres://..." down 1
 
 ## Project Docs
 
-| Doc | What it is |
-|---|---|
-| [docs/KANBAN.md](./docs/KANBAN.md) | The shared board. Every open card (`SM-<n>`), its priority, the pain it fixes, and why it sits where it does. Start here to see what is being built next. |
-| [docs/design/](./docs/design/) | Interaction specs, one per card. Written before the card is built. |
-| [docs/test-plans/](./docs/test-plans/) | Test plans per feature area, with the blocking tests called out. |
-| [docs/superpowers/](./docs/superpowers/) | The original plan and design spec for the games feature. |
-| [CHANGELOG.md](./CHANGELOG.md) | What shipped in each release. |
+[CHANGELOG.md](./CHANGELOG.md) records what shipped in each release, and [TODO.md](./TODO.md)
+tracks the post-MVP backlog.
+
+Planning material — the shared board, the per-card design specs, and the test plans — lives in
+`docs/`. Like `CLAUDE.md`, that directory is local to the working copy and not committed.
 
 ## Architecture Notes
 
