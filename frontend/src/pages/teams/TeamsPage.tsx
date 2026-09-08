@@ -86,8 +86,17 @@ export default function TeamsPage() {
           <Spinner size="lg" />
         </div>
       ) : teams.length === 0 ? (
-        <div className="mt-16 text-center">
-          <p className="text-foreground/50">No teams yet — create your first team.</p>
+        // A new coach's first screen. The action goes where the eye lands, not
+        // in the far top-right corner, and it says what happens next.
+        <div className="mt-20 flex flex-col items-center text-center">
+          <h2 className="text-lg font-semibold text-foreground">Create your first team</h2>
+          <p className="mt-2 max-w-sm text-sm text-foreground/50">
+            Start with your team name. You will add players to the roster next, then build
+            playbooks and track games.
+          </p>
+          <Button className="mt-6" onClick={() => setShowCreate(true)}>
+            Create Team
+          </Button>
         </div>
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

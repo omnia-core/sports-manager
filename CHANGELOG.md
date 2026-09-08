@@ -3,6 +3,21 @@
 All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Removed
+
+- `docs/` is no longer tracked. The board, the per-card design specs, the test plans,
+  and the superpowers plan/spec are agent workfiles — internal working notes for a
+  single-owner project — so they now live only in the working copy. The files are
+  unchanged on disk; only their tracking is gone. `.gitignore` keeps them out.
+
+### Changed
+
+- The README's Project Docs table is now a short note. It still points at the changelog
+  and the backlog, and it says plainly that `docs/` is local-only, the same way the
+  Architecture Notes section already does for `CLAUDE.md`.
+
 ## [0.0.1.0] - 2026-09-01
 
 ### Added

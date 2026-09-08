@@ -101,6 +101,12 @@ type GetGameDetailRequest struct {
 type GetGameDetailResponse struct {
 	Game    *models.Game       `json:"game"`
 	Players []GameDetailPlayer `json:"players"`
+	// CallerRole is the requesting user's role on the game's team ("coach" or
+	// "player"). The client needs it to decide whether to render editing
+	// controls, and cannot derive it from this response alone — deriving it
+	// from a separately-fetched team is what made a reloaded or deep-linked
+	// game read-only for its own coach.
+	CallerRole string `json:"caller_role"`
 }
 
 type UpdateGameRequest struct {
