@@ -167,11 +167,11 @@ fly deploy ./frontend
 
 ## Project Docs
 
-[CHANGELOG.md](./CHANGELOG.md) records what shipped in each release, and [TODO.md](./TODO.md)
-tracks the post-MVP backlog.
+[TODO.md](./TODO.md) tracks the post-MVP backlog.
 
-Planning material — the shared board, the per-card design specs, and the test plans — lives in
-`docs/`. Like `CLAUDE.md`, that directory is local to the working copy and not committed.
+Everything else is local to the working copy and not committed: the shared board, the per-card
+design specs and the test plans in `docs/`, the running `CHANGELOG.md`, and `CLAUDE.md`. This is
+a single-owner project and those are working notes rather than published material.
 
 ## Architecture Notes
 
