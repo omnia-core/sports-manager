@@ -106,6 +106,65 @@ migrate -path backend/migrations -database "postgres://..." down 1
 3. Player logs in (or registers — invite token is preserved through auth pages)
 4. Invite auto-accepted → player added to the team
 
+## Deployment (Fly.io)
+
+Two apps. `sports-manager` is public: nginx serves the built PWA and
+reverse-proxies `/api` to `sports-manager-api`, which has no public address and
+is reachable only over Fly's private network.
+
+That shape is not incidental. Auth cookies are `SameSite=Lax`, so the browser
+sends them only on same-origin requests. Both halves must sit behind one public
+origin — putting the API on its own hostname would mean the cookie is never
+sent and every API call 401s.
+
+### First deploy
+
+```bash
+# 1. API app, created but not yet deployed — it needs secrets first
+fly apps create sports-manager-api
+fly ips allocate-v6 --private -a sports-manager-api   # the .flycast address
+
+# 2. Postgres, then wire the URL in. Any managed Postgres works; if you use one
+#    outside Fly, make sure the URL ends with ?sslmode=require
+fly postgres create --name sports-manager-db
+fly postgres attach sports-manager-db -a sports-manager-api   # sets DATABASE_URL
+
+# 3. Secrets. JWT_SECRET must be random — rotating it logs everyone out.
+fly secrets set -a sports-manager-api   JWT_SECRET="$(openssl rand -base64 48)"   APP_URL="https://sports-manager.fly.dev"   ALLOWED_ORIGIN="https://sports-manager.fly.dev"   SMTP_HOST="..." SMTP_PORT="587"   SMTP_USERNAME="..." SMTP_PASSWORD="..." SMTP_FROM="..."
+
+# 4. Deploy the API. release_command applies migrations first and fails the
+#    deploy if one errors, leaving the old version serving.
+fly deploy ./backend
+
+# 5. Deploy the frontend
+fly deploy ./frontend
+```
+
+Deploy order matters only the first time: the frontend's nginx resolves
+`sports-manager-api.flycast` at startup, so the API needs its private address
+allocated before the frontend boots.
+
+### Later deploys
+
+```bash
+fly deploy ./backend    # runs migrations, then rolls the machines
+fly deploy ./frontend
+```
+
+### Environment
+
+| Variable | Where | Notes |
+|---|---|---|
+| `DATABASE_URL` | API, required | `fly postgres attach` sets it. Needs `?sslmode=require` outside Fly. |
+| `JWT_SECRET` | API, required | Random. Rotating invalidates every session. |
+| `APP_URL` | API | Public URL. Invite email links are built from it, so a wrong value sends players to a dead link. |
+| `ALLOWED_ORIGIN` | API | Public URL. |
+| `SMTP_*` | API | **With `SMTP_HOST` unset, invites are silently skipped** — the coach sees success and the player never gets an email. Set these before inviting anyone. |
+| `PORT` | API | Defaults to 8080; `fly.toml` sets it explicitly. |
+| `API_UPSTREAM` | frontend | nginx's proxy target. Defaults to `backend:8080` for Compose. |
+| `VITE_API_BASE_URL` | frontend, build arg | Empty means same-origin. Leave it empty. |
+| `VITE_DISABLE_SW` | frontend, build arg | Defaults to `false`. Compose sets `true` so a stale worker doesn't confuse local runs. |
+
 ## Project Docs
 
 [CHANGELOG.md](./CHANGELOG.md) records what shipped in each release, and [TODO.md](./TODO.md)
