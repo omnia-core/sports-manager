@@ -1,0 +1,33 @@
+# Private API app. It deliberately has no public service: the only route in is
+# the frontend app proxying /api over Fly's private network. Keeping both halves
+# on one public origin is what lets the SameSite=Lax auth cookies work at all.
+app = "sports-manager-api"
+primary_region = "nrt"
+
+[build]
+
+[env]
+  APP_ENV = "production"
+  PORT = "8080"
+
+# Runs on every deploy, before the new machines take traffic. Fails the deploy
+# if a migration fails, leaving the old version serving.
+[deploy]
+  release_command = "./migrate -dir ./migrations up"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  # Reachable only inside the organisation's private network.
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

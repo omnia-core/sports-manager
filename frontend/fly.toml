@@ -1,0 +1,29 @@
+# Public app: serves the built PWA and reverse-proxies /api to the API app.
+app = "sports-manager"
+primary_region = "nrt"
+
+[build]
+  [build.args]
+    # Empty means "same origin" — the frontend calls /api/... and nginx proxies
+    # it. Do not point this at the API's own hostname: a cross-origin call would
+    # not carry the SameSite=Lax auth cookie.
+    VITE_API_BASE_URL = ""
+
+[env]
+  # .flycast is a stable private anycast address. Using <app>.internal here
+  # would work until a machine was replaced — nginx resolves an upstream once at
+  # startup and then caches it, so it would keep dialling the old IP.
+  API_UPSTREAM = "sports-manager-api.flycast:8080"
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  # A coach opening the app courtside is exactly who a cold start hurts, so the
+  # machine stays up rather than scaling to zero.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

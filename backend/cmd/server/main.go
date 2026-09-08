@@ -151,8 +151,11 @@ func main() {
 		r.Delete("/{playID}", playbookHandler.DeletePlay)
 	})
 
-	log.Println("Server starting on :8080")
-	if err := http.ListenAndServe(":8080", r); err != nil {
+	// Fly sets the port from fly.toml's internal_port; other hosts inject PORT.
+	// Defaulting to 8080 keeps docker-compose and local runs unchanged.
+	addr := ":" + optionalEnv("PORT", "8080")
+	log.Printf("Server starting on %s", addr)
+	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}
 }

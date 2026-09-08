@@ -43,6 +43,9 @@ services:
       context: ./frontend
       args:
         VITE_API_BASE_URL: ""
+        # Local runs only. A stale service worker serving an old bundle is a
+        # confusing thing to debug; production builds ship it enabled.
+        VITE_DISABLE_SW: "true"
     ports:
       - "3000:80"
     depends_on:

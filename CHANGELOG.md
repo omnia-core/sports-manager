@@ -5,18 +5,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `fly.toml` for both apps, and a Deployment section in the README. The API app
+  has no public address: nginx on the public app proxies `/api` to it over Fly's
+  private network, which is what keeps the `SameSite=Lax` auth cookies working.
+- The backend image now also builds `cmd/migrate` and ships `migrations/`, so
+  Fly's `release_command` can apply migrations before new machines take traffic.
+
+### Fixed
+
+- **The PWA shipped dead in every Docker build.** `frontend/Dockerfile` hardcoded
+  `ENV VITE_DISABLE_SW=true`, so no service worker was generated — no offline
+  caching, not installable. That is the feature a coach needs courtside with no
+  signal. It is now a build arg defaulting to `false`; docker-compose passes
+  `true` so local runs keep the old behaviour.
+
+### Changed
+
+- The server binds `PORT` (default 8080) instead of a hardcoded `:8080`.
+- nginx's proxy target is `API_UPSTREAM`, defaulting to `backend:8080` so
+  Compose is unchanged. `nginx.conf` became `nginx.conf.template`, rendered by
+  the nginx image's entrypoint at container start.
+- The README's Project Docs table is now a short note. It still points at the changelog
+  and the backlog, and it says plainly that `docs/` is local-only, the same way the
+  Architecture Notes section already does for `CLAUDE.md`.
+
 ### Removed
 
 - `docs/` is no longer tracked. The board, the per-card design specs, the test plans,
   and the superpowers plan/spec are agent workfiles — internal working notes for a
   single-owner project — so they now live only in the working copy. The files are
   unchanged on disk; only their tracking is gone. `.gitignore` keeps them out.
-
-### Changed
-
-- The README's Project Docs table is now a short note. It still points at the changelog
-  and the backlog, and it says plainly that `docs/` is local-only, the same way the
-  Architecture Notes section already does for `CLAUDE.md`.
 
 ## [0.0.1.0] - 2026-09-01
 
